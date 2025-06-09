@@ -1,0 +1,290 @@
+---
+title: "Inspect random jaccard simulations"
+author: "Frieda"
+format: html
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+```
+
+```{r}
+jaccard_df <- readRDS("res/jaccards_sim_absolute_100runs.rds") %>% unique()
+```
+
+```{r}
+# print summary as tables
+
+head(jaccard_df)
+str(jaccard_df)
+jaccard_df %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, ) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            mean_unique_1 = mean(unique_1),
+            mean_unique_2 = mean(unique_2),
+            .groups = "keep")
+
+
+```
+
+### Jaccard \~ Number of changes \* length, flip_type, N_occu_1
+
+```{r}
+
+p1 <- jaccard_df %>%
+  ggplot()+
+  aes(y = jaccard, x = num_changes/length)+
+  facet_wrap(vars(length, flip_type))+
+  geom_point(aes(col = log(N_occu_1)))+
+  geom_smooth()+
+  scale_color_viridis_c(option = "viridis", direction = 1)+
+  theme_linedraw()
+
+p2 <- jaccard_df %>%
+  ggplot()+
+  aes(y = jaccard, x = log(num_changes))+
+  facet_wrap(vars(length, flip_type))+
+  geom_point(aes(col = log(N_occu_1)))+
+  geom_smooth()+
+  scale_color_viridis_c(option = "viridis", direction = 1)+
+  theme_linedraw()
+
+plot_grid(p1,p2, labels = "auto")
+```
+
+### Jaccard \~ N_occu_1 \* number of chanegs \* length \* flip_type
+
+```{r}
+
+
+# Visualization
+jaccard_df %>%
+  ggplot(aes(y = jaccard, x = log(N_occu_1), col = log(num_changes))) +
+  geom_point(alpha = 0.3) +
+  #geom_line(alpha = 0.3) +
+  facet_wrap(flip_type ~ length) +
+  theme_classic()
+
+ggplot(jaccard_df) +
+  aes(x = floor(log(N_occu_1)), y = jaccard, colour = log(num_changes)) +
+  geom_point(size = 2.5, shape = "circle small") +
+  geom_line(aes(group = log(num_changes)), linewidth = 0.75) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  #scale_x_continuous(trans = "log") +
+  labs(
+    x = "log(Number of initially occupied sites)",
+    y = "Jaccard Similarity",
+    title = "Jaccard ~ Number of initially occupied sites",
+    color = "log(Number of changes)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10L),
+    axis.text.x = element_text(size = 10L)
+  ) +
+  facet_wrap(vars(flip_type, length))
+
+
+jaccard_df %>%
+  ggplot(aes(y = jaccard, x = log(N_occu_1), col = num_changes, group = num_changes)) +
+  geom_point(alpha = 1/3) +
+  geom_line(alpha = 1/3) +
+  facet_wrap(flip_type ~ length) +
+  theme_linedraw()
+
+
+jaccard_df %>% filter(length == 10, num_changes == 1, flip_type == "from_1_to_0") %>%
+  ggplot()+
+  aes(y = jaccard, x = N_occu_1) +
+  geom_line()+
+  geom_point()
+
+
+
+jaccard_df %>% filter(num_changes < length-(length*0.1)) %>%
+  ggplot(aes(y = jaccard, x = log(occu1), col = num_changes, group = num_changes))+
+  geom_point(alpha = 1/3)+
+  geom_line(alpha = 1/3)+
+  facet_wrap(flip_type~length)+
+  theme_classic()
+
+ggplot(jaccard_df) +
+  aes(x = floor(log(N_occu_1)), y = jaccard, colour = log(num_changes)) +
+  geom_point(size = 2.5, shape = "circle small") +
+  geom_line(aes(group = log(num_changes)), linewidth = 0.75) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  #scale_x_continuous(trans = "log") +
+  labs(
+    x = "log(Number of initially occupied sites)",
+    y = "Jaccard Similarity",
+    title = "Jaccard ~ Number of initially occupied sites",
+    color = "log(Number of changes)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10L),
+    axis.text.x = element_text(size = 10L)
+  ) +
+  facet_wrap(vars(flip_type, length))
+
+
+jaccard_df %>%
+  filter(flip_type == "random") %>% filter(num_changes < length-(length*0.1)) %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  #geom_line()+
+  theme_linedraw()
+
+
+jaccard_df %>%
+  filter(flip_type == "from_1_to_0") %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =log(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  geom_line()+
+  theme_linedraw()
+
+
+jaccard_df %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =log(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  #geom_line()+
+  theme_linedraw()+
+  facet_wrap(~flip_type)
+
+
+```
+
+```{r}
+p_l <- lapply(unique(jaccard_df$length), function(length_i) {
+  lapply(unique(jaccard_df$flip_type), function(type_i) {
+    jaccard_df %>%
+      filter(length == length_i, flip_type == type_i) %>%
+      ggplot(aes(y = jaccard, x = log(num_changes), col = log(N_occu_1))) +
+      geom_point() +
+      geom_line(aes(group = log(N_occu_1)))+
+      scale_color_viridis_c(option = "viridis", direction = 1) +
+      labs(
+        title = "Jaccard ~ log Number of changes",
+        subtitle = paste0("Length = ", length_i, ", Flip Type = ", type_i)
+      )
+  }) %>% setNames(unique(jaccard_df$flip_type))  # Name the inner list by flip_type
+}) %>% setNames(unique(jaccard_df$length))  # Name the outer list by length
+
+
+
+
+plot_grid(plotlist = unlist(p_l, recursive = FALSE), ncol = 2)
+
+
+
+ggsave("jaccard_nchanges_grid.pdf", last_plot(), device = "pdf")
+
+```
+
+```{r}
+jaccard_df %>% 
+  mutate(log_num_changes = log(num_changes),
+         log_N_occu_1 = log(N_occu_1)) %>%
+  filter(flip_type == "random")%>%
+  ggplot(aes(y = jaccard, x = log_num_changes, col = log_N_occu_1))+
+  geom_point()+
+  geom_line(aes(group = N_occu_1))+
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  facet_wrap(~ length, scales = "free")+
+      labs(
+        title = "Jaccard ~ log Number of changes")+
+  theme_minimal()
+
+jaccard_df %>%   
+  mutate(log_num_changes = log(num_changes),
+         log_N_occu_1 = log(N_occu_1)) %>% 
+  filter(flip_type == "random") %>%
+    ggplot(aes(y = jaccard, x = log_num_changes, col = factor(N_occu_1)))+
+  geom_point()+
+  geom_line(aes(group = interaction(N_occu_1, N_occu_2)))+
+  scale_color_viridis_d(option = "viridis", direction = 1) +
+  facet_wrap(~ length, scales = "free")+
+      labs(
+        title = "Jaccard ~ log Number of changes")+
+  theme_minimal()
+
+
+```
+
+```{r}
+
+# List all grouping variables
+group_vars <- c("length", "flip_type", "num_changes", "N_occu_1")
+
+# Split data by unique combinations of the four variables
+df_list <- split(jaccard_df, jaccard_df[group_vars])
+
+# Apply the plotting function over each subset
+p_l <- lapply(df_list, function(df_subset) {
+  ggplot(df_subset, aes(y = jaccard, x = N_occu_1, col = log(num_changes))) +
+    geom_point() +
+    labs(
+      title = "Jaccard ~ Number of Occupied Sites",
+      subtitle = paste0(
+        "Length = ", unique(df_subset$length), ", ",
+        "Flip Type = ", unique(df_subset$flip_type), ", ",
+        "Var3 = ", unique(df_subset$var3), ", ",
+        "Var4 = ", unique(df_subset$var4)
+      )
+    )
+})
+
+plot_grid(plot_list = p_l)
+```
+
+```{r}
+
+## Heat maps
+res_proportional <- jaccard_df %>% select(-occu1, -run) %>%
+  group_by(length, flip_type, num_changes) %>%
+  mutate(prop_occu_1 = N_occu_1/length,
+         prop_occu_2 = N_occu_2/length,
+         prop_intersect = intersect/length,
+         prop_union = sum(unique_1, unique_2, intersect)/length)
+
+res_proportional
+
+
+# Create a heatmap plot
+ggplot(jaccard_df %>% filter(flip_type == "random"), aes(x = N_occu_2, y = N_occu_1, fill = jaccard)) +
+  geom_tile(color = "white") + # Add gridlines
+  scale_fill_gradient(low = "blue", high = "red", name = "Expected Jaccard") +
+  labs(
+    title = "Expected Jaccard Similarity",
+    subtitle = "Based on Set Occupancy and Universe Size",
+    x = "Set 2 Occupancy",
+    y = "Set 1 Occupancy"
+  ) +
+  theme_minimal() +
+  facet_wrap(~factor(length))+
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+
+```
