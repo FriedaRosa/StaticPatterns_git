@@ -49,17 +49,17 @@ fs::dir_tree(here::here(), recurse = F)
     ├── Code
     ├── Data
     ├── Demo_NewYork
-    ├── Documentation
     ├── Figures
     ├── Folder_metadata.xlsx
     ├── Git.Rproj
-    ├── images
+    ├── Project_Description.html
     ├── Project_Description.qmd
-    ├── README.html
     ├── README.md
     ├── README.qmd
     ├── README.rmarkdown
     ├── README_files
+    ├── renv
+    ├── renv.lock
     └── StaticPatterns_Results_all.xlsx
 
 There are three sections in this project: The first part (A) produces
@@ -85,9 +85,7 @@ variables and lookup tables needed for many steps.
 
 # 2. Methods summary
 
-## A) Workflow diagram
-
-## B) Description of steps
+## A) Description of steps
 
 1.  Get data from MOBI database for first two replications (Cz, Ny, Jp,
     Eu)
@@ -142,7 +140,7 @@ variables and lookup tables needed for many steps.
     predictors calculated from second period to predict responses for
     the third period and get residuals
 
-#### Modeling settings:
+## B) Modeling settings:
 
 - 80/20 split (80 training, 20 testing)
 
