@@ -1,5 +1,5 @@
 ---
-title: "Static Predictors - Read me"
+title: "Static Predictors - Project and Folder description"
 format:
   html:
     self-contained: true

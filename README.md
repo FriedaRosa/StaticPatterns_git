@@ -87,47 +87,6 @@ variables and lookup tables needed for many steps.
 
 ## A) Workflow diagram
 
-``` r
-#install.packages("DiagrammeR")
-library(DiagrammeR)
-
-grViz("
-digraph workflow {
-  
-  graph [rankdir = LR]  // left to right
-  node [shape = box, style = filled, fillcolor = LightBlue, fontname = Helvetica]
-
-  Step1 [label = 'A Get Data', fillcolor = '#f1a340']
-  Step2 [label = 'A Clean Data', fillcolor = '#f1a340']
-  Step3 [label = 'A Prepare Predictors', fillcolor = '#f1a340']
-  Step4 [label = 'B Random Forest' , fillcolor = '#7fbf7b']
-  Step5 [label = 'B Performance Evaluation', fillcolor = '#7fbf7b']
-  Step6 [label = 'B xAI', fillcolor = '#7fbf7b']
-  Step7 [label = 'C Validation against Atlas 3', fillcolor = '#998ec3']
-  Step8 [label = 'B Phylogenetic Autocorrelation', fillcolor = '#7fbf7b']
-  Step9 [label = 'C Jaccard simulations', fillcolor = '#998ec3']
-  Step10 [label = 'D Make Change Maps', fillcolor = '#e66101']
-  Step11 [label = 'Figure 1', fillcolor = '#e66101']
-  Step12 [label = 'Figure 2', fillcolor = '#e66101']
-  Step13 [label = 'Figure 3', fillcolor = '#e66101']
-  Step14 [label = 'Figure 4', fillcolor = '#e66101']
-
-  Step1 -> Step2 -> Step3 -> Step4 -> Step5;
-  Step3 -> Step9;
-  Step4 -> Step6; Step4 -> Step7; Step4 -> Step8;
-  Step2 -> Step10;
-  Step3 -> Step11; Step3 -> Step12;
-  Step5 -> Step13; Step6 -> Step13;
-  Step7 -> Step14;
-  Step10 -> Step11;
-}
-")
-```
-
-    file:///C:/Users/wolke/AppData/Local/Temp/Rtmp2zSvKw/file65cc423d1e6c/widget65cc1c1a3794.html screenshot completed
-
-![](README_files/figure-commonmark/unnamed-chunk-2-1.png)
-
 ## B) Description of steps
 
 1.  Get data from MOBI database for first two replications (Cz, Ny, Jp,

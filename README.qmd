@@ -74,6 +74,8 @@ variables and lookup tables needed for many steps.
 ## A) Workflow diagram
 
 ```{r, fig.width = 12}
+#| include: false
+
 #install.packages("DiagrammeR")
 library(DiagrammeR)
 
