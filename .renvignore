@@ -1,0 +1,25 @@
+# Ignore Quarto output folders
+_site/
+docs/
+_output/
+
+# Ignore common non-R folders
+Data/
+Documentation/
+Figures/
+images/
+_files/
+
+# Ignore large or temporary files
+*.html
+*.pdf
+*.docx
+*.png
+*.jpeg
+*.jpg
+*.csv
+*.rds
+
+
+# Ignore RStudio project metadata
+.Rproj.user/
