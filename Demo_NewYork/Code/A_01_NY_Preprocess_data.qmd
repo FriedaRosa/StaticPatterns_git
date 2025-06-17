@@ -196,7 +196,9 @@ if (!dir.exists(here::here("Demo_NewYork/Data/input"))) {
   dir.create(here::here("Demo_NewYork/Data/input"))
   }
 
-write.csv2(dta, here::here("Demo_NewYork/Data/input/raw_data_ny.csv"))
+saveRDS(dta, here::here("Demo_NewYork/Data/input/raw_data_ny.rds"))
+
+
 saveRDS(grids, here::here("Demo_NewYork/Data/input/grid_ny.rds"))
 saveRDS(data_sf, here::here("Demo_NewYork/Data/input/sf_data_ny.rds"))
 ```

@@ -8,7 +8,7 @@ format:
     theme: cosmo       # optional: Bootstrap theme
     code-fold: show    # optional: collapsible code blocks
     code-tools: true   # optional: adds copy/paste buttons
-    toc-depth: 2  
+    toc-depth: 3  
 editor: 
   markdown: 
     wrap: 72
