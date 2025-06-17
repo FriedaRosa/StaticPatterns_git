@@ -181,6 +181,12 @@ rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","tr
 For this part we need a personal API key to access the IUCN Red List API. You can get one from [here](https://api.iucnredlist.org/). There you have to sign up with an account and request an API token. Once you have it, you can either set it as an environment variable in an .Renviron file e.g., `IUCN_REDLIST_KEY = [key]` or paste it directly into the code below.
 
 - [4] IUCN (2025)
+```{r}
+#| include: false
+#| eval: true
+my_key <-"DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
+```
+
 
 ```{r}
 #| warning: false
@@ -193,8 +199,7 @@ tictoc::tic()
 IUCN.list <-
   suppressMessages(iucn_summary(unique(sci_name$scientificName),
     distr.detail = F,
-    key =" DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
-    #key = Sys.getenv("IUCN_REDLIST_KEY") # Replace with your API KEY
+    key = my_key # change to your token key
   ))
 tictoc::toc() # 179.11 sec elapsed
 
@@ -237,8 +242,7 @@ species_with_NA <-
 IUCN.list2 <-
   suppressMessages(iucn_summary(unique(species_with_NA$name),
     distr.detail = F,
-    key =" DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
-    #key = Sys.getenv("IUCN_REDLIST_KEY")
+    key =my_key
   ))
 # 3 species not found of which 2 are hybrids and Nannopterium auritus which we will look up manually and assign the status by hand
 
