@@ -1,0 +1,1192 @@
+---
+title: "Simulating J dissimilarity under different scenarios of scale, occupancy, temporal change magnitude"
+author: "Friederike Wölke"
+format: html
+editor: visual
+---
+
+# Simulating *J dissimilarity* under different scenarios of scale, occupancy, temporal change magnitude
+
+## ℹ️Parameters to simulate
+
+-- universe size\
+– occu 1\
+– flip type: directional/random\
+– number of changes\
+– number of runs
+
+## ❇️ Simulation function
+
+```{r}
+#| eval: false
+#| include: true
+
+my_jaccard_abc <- function(set1, set2){
+  a <- length(intersect(set1, set2))
+  b <- length(setdiff(set2, set1))
+  c <- length(setdiff(set1, set2))
+  res <- data.frame(j = a / (a + b + c),
+             intersect = a,
+             unique_1 = c,
+             unique2 = b)
+  return(res)
+}
+
+
+
+set.seed(123) # For reproducibility
+
+simulate_jaccard <- function(lengths, occu1, flip_types, n_runs = 1) {
+  # Expand grid for parameter combinations
+  params <- expand.grid(lengths, occu1, flip_types, stringsAsFactors = FALSE)
+  colnames(params) <- c("length", "occu1", "flip_type")
+
+  # Initialize storage
+  jaccard_results <- list()
+
+  # Loop through parameter combinations
+  for (row_i in seq_len(nrow(params))) {
+    length_i <- params$length[row_i]
+    occu_1_i <- params$occu1[row_i]
+    flip_type <- params$flip_type[row_i]
+
+    # Ensure the number of occupied sites does not exceed the vector length
+    occu_1_i <- min(occu_1_i, length_i)
+
+    # Repeat the simulation `n_runs` times
+    for (run in seq_len(n_runs)) {
+      # Generate set1 (initially occupied sites)
+      set1_i <- sample(1:length_i, occu_1_i, replace = FALSE)
+
+      # Sequence of number of changes (from 1 to max_vector_length)
+      n_changes <- seq(from = 1, to = length_i, by = 1)
+
+      # Dataframe to store results for this run
+      jaccard_temp <- data.frame(num_changes = n_changes, jaccard = NA, run = run)
+
+      set2_temp_list <- vector("list", length(n_changes))
+
+      # Modify set1 stepwise and store set2 states
+      for (n_i in seq_along(n_changes)) {
+        set2_temp <- set1_i
+        changes_i <- n_changes[n_i]
+
+        if (flip_type == "random") {
+          flip_sites <- sample(1:length_i, size = changes_i, replace = FALSE)
+
+          set2_i <- union( # Combine left overs after 1 to 0 flips with new cells from 0 to 1 flips
+            setdiff(set2_temp, flip_sites), # Remove indices in `flip_sites` already in `set2_temp`
+            intersect(flip_sites, setdiff(1:length_i, set2_temp)) # Add indices not in `set2_temp` (0 to 1; colonizations)
+          )
+        } else if (flip_type == "from_1_to_0") {
+          sample_mat <- if (length(set1_i) == 1) rep(set1_i, 2) else set1_i
+          flip_sites <- sample(x = sample_mat, size = min(changes_i, length(set1_i)), replace = FALSE)
+          set2_i <- setdiff(set2_temp, flip_sites) # Remove flipped sites from set1
+          set2_i <- if (length(set2_i) == 0) NA else set2_i
+        }
+
+        # Store modified set2
+        set2_temp_list[[n_i]] <- set2_i
+
+        # Compute Jaccard similarity
+        jaccard_res <- my_jaccard_abc(set1_i, set2_i)
+
+        jaccard_temp$jaccard[n_i] <- jaccard_res$j
+        jaccard_temp$intersect[n_i] <- jaccard_res$intersect
+        jaccard_temp$unique_1[n_i] <- jaccard_res$unique_1
+        jaccard_temp$unique_2[n_i] <- jaccard_res$unique_2
+        jaccard_temp$N_occu_1[n_i] <- jaccard_res$N_occu_1
+        jaccard_temp$N_occu_2[n_i] <- jaccard_res$N_occu_2
+        jaccard_temp$length[n_i] <- length_i
+        jaccard_temp$occu1[n_i] <- occu_1_i
+        jaccard_temp$flip_type[n_i] <- flip_type
+      }
+
+      # Append results for this run
+      jaccard_results[[length(jaccard_results) + 1]] <- jaccard_temp
+    }
+  }
+
+  # Combine Jaccard results into a single dataframe for visualization
+  jaccard_df <- do.call(rbind, jaccard_results)
+  return(jaccard_df)
+}
+
+```
+
+## 🏎️Run simulations
+
+```{r}
+#| eval: false
+#| include: true
+
+# Example usage
+lengths <- c(10, 100, 1000)
+occu1 <- c(2^(0:floor(log2(1000))), 999)
+flip_types <- c("random", "from_1_to_0")
+n_runs <- 100 # Repeat each parameter combination 100 times
+
+
+
+jaccard_df <- 
+  simulate_jaccard(lengths, occu1, flip_types, n_runs)
+
+saveRDS(jaccard_df, "Code/Sensitivity/Jaccard_Prevalence_Simulations/res/jaccards_sim_absolute_100runs.rds")
+
+```
+
+## 🔍Inspect results
+
+```{r}
+#| label: libraries
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(plotly))
+suppressPackageStartupMessages(library(skimr))
+
+```
+
+```{r}
+#| label: read-data
+jaccard_df <- 
+  readRDS(
+    here("Data/output/temp", 
+         "C_02_Jaccard_simulations_100.rds")) %>% 
+  unique()
+```
+
+```{r}
+#| label: process-data
+# quick check
+str(jaccard_df)
+
+
+# organize data frame to inspect
+sim_df <- data.frame(
+  run = jaccard_df$run,
+  universe_size = jaccard_df$length,
+  change_type = as.factor(jaccard_df$flip_type),
+  n_changes = jaccard_df$num_changes,
+  j_dissim = 1-round(jaccard_df$jaccard, 4),
+  AOO_1 = jaccard_df$N_occu_1,
+  AOO_2 = jaccard_df$N_occu_2,
+  a = jaccard_df$intersect,
+  b = jaccard_df$unique_2,
+  c = jaccard_df$unique_1,
+  d = jaccard_df$length - jaccard_df$intersect - jaccard_df$unique_2 - jaccard_df$unique_1
+) %>%
+  ungroup() %>%
+  filter(AOO_1 != 0 & AOO_2 != 0) %>%
+  filter(AOO_1 != universe_size) %>%
+  filter(n_changes != universe_size) %>%
+  mutate(
+    log_ratio = log(AOO_2/AOO_1),
+    rel_persistance = a/universe_size,
+    change_intensity = (b+c)/AOO_1) %>%
+  ungroup() %>%
+  mutate(
+    trend = case_when(b > c ~ "expanding range",
+                      b < c ~ "declining range",
+                      b == c ~ "A_net zero trend", #added A to sort levels for regression
+                      .default = NA))
+
+sim_df %>% filter(is.na(trend)) # no NAs
+```
+
+```{r}
+# create expanding trend for directional simulations from declining
+
+expanding <- 
+  sim_df %>% 
+  filter(change_type == "from_1_to_0") %>%
+  mutate(change_type = "from_0_to_1") %>%
+  mutate(log_ratio = log(AOO_1/AOO_2)) %>% 
+  rename("b" = "c", 
+         "c" = "b", 
+         "AOO_1" = "AOO_2", 
+         "AOO_2" = "AOO_1") %>%
+  mutate(
+    trend = case_when(b > c ~ "expanding range",
+                      b < c ~ "declining range",
+                      b == c ~ "A_net zero trend", 
+                      #added A to sort levels for regression
+                      .default = NA))
+
+expanding %>% filter(is.na(trend)) # no NAs  
+  
+sim_df <- 
+  sim_df %>% 
+  full_join(expanding) %>%
+  mutate(trend = as.factor(trend)) %>%
+  mutate(change_type2 = case_when(change_type == "random" ~ "random", change_type %in% c("from_1_to_0", "from_0_to_1") ~ "directional",
+                                  .default = NA))
+
+
+sim_df %>% 
+  filter(change_type == "from_0_to_1") %>%
+  group_by(trend) %>% 
+  skim(log_ratio, a,b,c)
+
+```
+
+```{r}
+#| label: j-summary-1
+
+# quick check:
+sim_df %>%
+  filter(change_type == "random") %>%
+  group_by(universe_size, AOO_1, n_changes, change_type, b, c) %>%
+  summarize(mean_j = mean(j_dissim),
+            sd_j = sd(j_dissim),
+            n = n())
+
+
+sim_df %>% 
+  filter(change_type == "random" & universe_size == 1000) %>%
+  group_by(trend) %>% 
+  skimr::skim()
+
+# --> for directional change, there is no variation in J.
+```
+
+## random x large (10 simulations)
+
+```{r}
+#| label: data-subset-random-and-large
+random_large <- 
+  sim_df %>% 
+  filter(universe_size == 1000) %>% 
+  filter(change_type == "random") %>% 
+  #filter(run <= 10) %>%
+  select(-universe_size, -change_type)
+```
+
+#### Correlation analysis
+
+```{r}
+#| label: correlations
+library(corrr)
+
+# Select numeric columns and compute correlation with targets
+cor_df <- random_large %>%
+  select(where(is.numeric)) %>%
+  correlate() %>%
+  focus(j_dissim, log_ratio) %>%
+  mutate(j_dissim = round(j_dissim, 2),
+         log_ratio = round(log_ratio, 2))
+
+print(cor_df)
+
+random_large %>%
+  select(where(is.numeric)) %>%
+  correlate() %>%
+  autoplot()
+```
+
+#### Regression models
+
+```{r}
+#| label: regression-models
+# Add interaction term
+random_large <- random_large %>%
+  mutate(AOO_1_n_changes = AOO_1 * n_changes)
+
+# j_dissim model
+model_jaccard <- lm(j_dissim ~  AOO_1:n_changes + a + b + c + d + trend, data = random_large)
+summary(model_jaccard)
+
+# log_ratio model
+model_log_ratio <- lm(log_ratio ~ AOO_1:n_changes + a + b + c + d + trend, data = random_large)
+summary(model_log_ratio)
+
+model_log_ratio$coefficients %>% round(2)
+
+
+```
+
+```{r}
+#| fig.height: 12
+#| fig.width: 10
+#| label: j-by-net-area-trend
+
+# Boxplot for j_dissim
+ggplot(sim_df, aes(x = trend, y = j_dissim, fill = trend)) +
+  geom_hline(yintercept = 0.5, col = "darkgrey")+
+  geom_boxplot(outlier.colour = "darkgrey") +
+  ggthemes::theme_par() +
+  labs(title = "Jaccard Dissimilarity by Trend", x = "Trend", y = "j_dissim")+
+  facet_grid(universe_size ~ change_type2)+
+  scale_fill_manual(values = c("#ffffbf", "#d7191c", "#1a9641"))+
+    theme(
+    axis.text.x = element_text(
+      angle = 45, 
+      vjust = 0.9, 
+      hjust = 1))
+
+ggsave(filename = "J_simulations_j_trends_boxplots.bmp", path = here::here("Figures/C_validation/"), width = 10, height = 12)
+
+# Boxplot for log_ratio
+ggplot(sim_df, aes(x = trend, y = log_ratio, fill = trend)) +
+  geom_hline(yintercept = 0, col = "darkgrey")+
+  geom_boxplot(outlier.colour = "darkgrey") +
+  ggthemes::theme_par() +
+  labs(title = "Log Ratio by Trend", x = "Trend", y = "log_ratio")+
+  facet_grid(universe_size ~ change_type2)+
+  scale_fill_manual(values = c("#ffffbf", "#d7191c", "#1a9641"))+
+  theme(
+    axis.text.x = element_text(
+      angle = 45, 
+      vjust = 0.9, 
+      hjust = 1))
+
+ggsave(filename = "J_simulations_logRatio_trends_boxplots.svg", path = here::here("Figures/C_validation/"), width = 10, height = 12)
+```
+
+```{r}
+# what about the large tail for declining and expanding ranges in the directional trial? 
+
+sim_df %>% 
+  filter(change_type != "random") %>% 
+  filter(j_dissim != 1) %>% 
+  ggplot()+
+  geom_histogram(aes(j_dissim))
+
+
+sim_df %>% 
+  filter(change_type != "random" & universe_size != 10) %>% 
+  filter(j_dissim != 1) %>% 
+  group_by(change_type, universe_size) %>% 
+  ggplot()+
+  geom_point(aes(y = j_dissim, 
+                 x = change_intensity, 
+                 col = change_intensity))+
+  facet_wrap(change_type~universe_size, scales = "free")+
+  scale_color_distiller(type = "div")
+
+# Change intensity is:
+# the ratio between the number of changed cells and AOO_1:
+# change intensity = (b+c)/AOO_1
+# where b = colonized cells, c = extirpated cells
+
+# Explanation:
+# I.
+# ratio approaches 0 when low change 
+# - i.e., when the number of lost + gained cells is low compared to AOO_1.
+# - b+c < AOO_1
+# --> leads to low J dissimilarity
+
+
+# II.
+#  ratio approaches 1 when high change 
+# - i.e., when the number of lost + gained cells is comparable to AOO_1 
+# - b+c = AOO_1
+# --> leads to high J dissimilarity for both directions of change
+
+# III.
+# ratio approaches 2 when change is higher than initial occupancy
+# - i.e., when more cells are lost + gained than occupied in AOO_1,
+# - b+c >> AOO_1
+# - --> leads to moderate to high J when range is expanding
+# - --> leads to high J if range is declining
+
+# or
+# - i.e., when all no cells persist, i.e., all cells from AOO_1 are lost and some are gained (c = AOO_1 & b > 0)
+# - a = 0
+# --> leads to high J for both directions of change
+# or
+# - i.e., with strong expansion (b >> AOO_1)
+# --> leads to moderate to strong J for both directions
+```
+
+```{r}
+random_large %>% 
+  filter(run <= 20) %>%
+  ggplot(aes(x = log_ratio, y = j_dissim, col = trend))+ 
+  geom_jitter(cex = 0.1,  alpha = 0.3)+
+  ggthemes::theme_few()
+```
+
+```{r}
+random_large %>%
+  ggplot()+
+  geom_point(aes(
+    y = log_ratio, 
+    x = log(AOO_1), 
+    col = log(n_changes)), 
+    alpha = 0.1)+
+  ggthemes::theme_par()+
+  facet_wrap(~ trend)
+
+random_large %>%
+  ggplot()+
+  geom_point(aes(
+    y = j_dissim, 
+    x = log(AOO_1), 
+    col = log(n_changes)), 
+    alpha = 0.1)+
+  ggthemes::theme_par()+
+  facet_wrap(~ trend)
+
+
+```
+
+```{r}
+
+
+plot_ly(random_large, 
+        z = ~ n_changes, 
+        y = ~ j_dissim, 
+        x = ~ AOO_1, 
+        type = "scatter3d",
+        mode = "markers"
+        ) %>% 
+  add_markers(color = ~ d) %>%
+    layout(title = "3D Scatter Plot",
+         scene = list(xaxis = list(title = "AOO 1"),
+                      yaxis = list(title = "Jaccard"),
+                      zaxis = list(title = "n changes")))
+
+
+```
+
+#### 3D surface plot for Jaccard (GAM smoothed)
+
+```{r}
+library(plotly)
+# Create a grid for plotting (if needed, you can smooth with a GAM first)
+library(mgcv)
+
+
+gam_mod <- gam(j_dissim ~ te(AOO_1, n_changes), data = random_large)
+
+# Predict over a grid
+grid_df <- expand.grid(
+  AOO_1 = seq(min(random_large$AOO_1), max(random_large$AOO_1), length = 50),
+  n_changes = seq(min(random_large$n_changes), max(random_large$n_changes), length = 50)
+)
+
+grid_df$pred_jaccard <- predict(gam_mod, newdata = grid_df)
+
+# Reshape into matrix for surface plot
+z_matrix <- matrix(grid_df$pred_jaccard, nrow = 50, ncol = 50)
+
+p <- plot_ly(
+  x = ~unique(grid_df$AOO_1),
+  y = ~unique(grid_df$n_changes),
+  z = ~z_matrix
+) %>%
+  add_surface(opacity = 0.7) %>%
+  layout(
+    title = "Jaccard Surface",
+    scene = list(
+      xaxis = list(title = "Initial Occupancy"),
+      yaxis = list(title = "Number of Changes"),
+      zaxis = list(title = "Predicted Jaccard")
+    )
+  )
+
+
+
+## add boxes outside of cube
+# Compute axis limits
+xlim <- range(grid_df$AOO_1)
+ylim <- range(grid_df$n_changes)
+zlim <- range(grid_df$pred_jaccard)
+
+# Define cube corners
+x_vals <- xlim
+y_vals <- ylim
+z_vals <- zlim
+
+# Function to create lines between pairs of corners
+add_box_edges <- function(plot) {
+  lines <- list(
+    # bottom rectangle
+    list(x = x_vals, y = rep(y_vals[1], 2), z = rep(z_vals[1], 2)),
+    list(x = x_vals, y = rep(y_vals[2], 2), z = rep(z_vals[1], 2)),
+    list(x = rep(x_vals[1], 2), y = y_vals, z = rep(z_vals[1], 2)),
+    list(x = rep(x_vals[2], 2), y = y_vals, z = rep(z_vals[1], 2)),
+
+    # top rectangle
+    list(x = x_vals, y = rep(y_vals[1], 2), z = rep(z_vals[2], 2)),
+    list(x = x_vals, y = rep(y_vals[2], 2), z = rep(z_vals[2], 2)),
+    list(x = rep(x_vals[1], 2), y = y_vals, z = rep(z_vals[2], 2)),
+    list(x = rep(x_vals[2], 2), y = y_vals, z = rep(z_vals[2], 2)),
+
+    # vertical lines
+    list(x = rep(x_vals[1], 2), y = rep(y_vals[1], 2), z = z_vals),
+    list(x = rep(x_vals[1], 2), y = rep(y_vals[2], 2), z = z_vals),
+    list(x = rep(x_vals[2], 2), y = rep(y_vals[1], 2), z = z_vals),
+    list(x = rep(x_vals[2], 2), y = rep(y_vals[2], 2), z = z_vals)
+  )
+
+  for (edge in lines) {
+    plot <- plot %>% add_trace(
+      type = 'scatter3d',
+      mode = 'lines',
+      x = edge$x,
+      y = edge$y,
+      z = edge$z,
+      line = list(color = 'black', width = 2),
+      showlegend = FALSE
+    )
+  }
+
+  return(plot)
+}
+
+# Add the box outlines
+p_with_box <- add_box_edges(p)
+p_with_box
+
+
+
+# Add contours
+fig <- p_with_box %>% 
+add_surface(opacity = 0.7,
+  contours = list(
+    z = list(
+      show=TRUE,
+      usecolormap=TRUE,
+      highlightcolor="#ff0000",
+      project=list(z=TRUE)
+      )
+    )
+  )
+fig %>% layout(
+    scene = list(
+      camera=list(
+        eye = list(x=-0.8, y=0.8, z=0.6)
+        )
+      )
+  )
+
+fig %>% layout(scene = list(camera = list(eye = list(x = -1.25, y = 1.25, z = 1.25))))
+```
+
+```{r}
+library(plotly)
+# Create a grid for plotting (if needed, you can smooth with a GAM first)
+library(mgcv)
+
+
+gam_mod <- gam(log_ratio ~ te(AOO_1, n_changes), data = random_large)
+
+# Predict over a grid
+grid_df <- expand.grid(
+  AOO_1 = seq(min(random_large$AOO_1), max(random_large$AOO_1), length = 50),
+  n_changes = seq(min(random_large$n_changes), max(random_large$n_changes), length = 50)
+)
+
+grid_df$pred_lr <- predict(gam_mod, newdata = grid_df)
+
+# Reshape into matrix for surface plot
+z_matrix <- matrix(grid_df$pred_lr, nrow = 50, ncol = 50)
+
+p <- plot_ly(
+  x = ~unique(grid_df$AOO_1),
+  y = ~unique(grid_df$n_changes),
+  z = ~z_matrix
+) %>%
+  add_surface(opacity = 0.7) %>%
+  layout(
+    title = "Log Ratio Surface",
+    scene = list(
+      xaxis = list(title = "Initial Occupancy"),
+      yaxis = list(title = "Number of Changes"),
+      zaxis = list(title = "Predicted log ratio")
+    )
+  )
+
+
+
+## add boxes outside of cube
+# Compute axis limits
+xlim <- range(grid_df$AOO_1)
+ylim <- range(grid_df$n_changes)
+zlim <- range(grid_df$pred_lr)
+
+# Define cube corners
+x_vals <- xlim
+y_vals <- ylim
+z_vals <- zlim
+
+# Function to create lines between pairs of corners
+add_box_edges <- function(plot) {
+  lines <- list(
+    # bottom rectangle
+    list(x = x_vals, y = rep(y_vals[1], 2), z = rep(z_vals[1], 2)),
+    list(x = x_vals, y = rep(y_vals[2], 2), z = rep(z_vals[1], 2)),
+    list(x = rep(x_vals[1], 2), y = y_vals, z = rep(z_vals[1], 2)),
+    list(x = rep(x_vals[2], 2), y = y_vals, z = rep(z_vals[1], 2)),
+
+    # top rectangle
+    list(x = x_vals, y = rep(y_vals[1], 2), z = rep(z_vals[2], 2)),
+    list(x = x_vals, y = rep(y_vals[2], 2), z = rep(z_vals[2], 2)),
+    list(x = rep(x_vals[1], 2), y = y_vals, z = rep(z_vals[2], 2)),
+    list(x = rep(x_vals[2], 2), y = y_vals, z = rep(z_vals[2], 2)),
+
+    # vertical lines
+    list(x = rep(x_vals[1], 2), y = rep(y_vals[1], 2), z = z_vals),
+    list(x = rep(x_vals[1], 2), y = rep(y_vals[2], 2), z = z_vals),
+    list(x = rep(x_vals[2], 2), y = rep(y_vals[1], 2), z = z_vals),
+    list(x = rep(x_vals[2], 2), y = rep(y_vals[2], 2), z = z_vals)
+  )
+
+  for (edge in lines) {
+    plot <- plot %>% add_trace(
+      type = 'scatter3d',
+      mode = 'lines',
+      x = edge$x,
+      y = edge$y,
+      z = edge$z,
+      line = list(color = 'black', width = 2),
+      showlegend = FALSE
+    )
+  }
+
+  return(plot)
+}
+
+# Add the box outlines
+p_with_box <- add_box_edges(p)
+p_with_box
+
+
+
+# Add contours
+fig <- p_with_box %>% 
+add_surface(opacity = 0.7,
+  contours = list(
+    z = list(
+      show=TRUE,
+      usecolormap=TRUE,
+      highlightcolor="#ff0000",
+      project=list(z=TRUE)
+      )
+    )
+  )
+
+
+fig %>% layout(scene = list(camera = list(eye = list(x = -1.25, y = 1.25, z = 1.25))))
+```
+
+```{r}
+# library(rgl)
+# with(random_large, {
+#   plot3d(AOO_1, n_changes, j_dissim,
+#          col = "blue", 
+#          size = 3, 
+#          type = "s", 
+#          xlab = "Initial Occ.", 
+#          ylab = "Changes", 
+#          zlab = "Jaccard")
+# })
+
+```
+
+```{r}
+library(scatterplot3d)
+scatterplot3d(random_large$AOO_1, 
+              random_large$n_changes, 
+              random_large$j_dissim,
+              pch = 16, 
+              color = "darkgreen",
+              xlab = "Initial Occupancy", 
+              ylab = "Num. Changes", 
+              zlab = "Jaccard")
+
+```
+
+```{r}
+#| fig.width = 40
+#| fig.height = 30
+
+library(GGally)
+GGally::ggpairs(
+  random_large %>% 
+    select(-run, -change_type, -universe_size), 
+  progress = FALSE)
+
+```
+
+```{r}
+library(ggplot2)
+ggplot(sim_df, aes(x = AOO_1, y = AOO_2, color = j_dissim)) +
+  geom_point(alpha = 0.7) +
+  scale_color_viridis_c() +
+  facet_wrap(~ change_type) +
+  theme_minimal()
+
+sim_df %>%
+  filter(change_type == "random") %>%
+ggplot(
+  aes(x = log_ratio, 
+      y = j_dissim), 
+  alpha = 0.5,
+  cex = 0.1)+
+  geom_point()+
+  facet_wrap(~ universe_size)+
+  ggthemes::theme_par()
+
+
+# Mean values (faster)
+sim_df %>%
+  group_by(universe_size, change_type, n_changes) %>%
+  summarize(
+    mean_a = mean(a),
+    mean_b = mean(b),
+    mean_c = mean(c),
+    mean_d = mean(d),
+    mean_j = mean(j_dissim),
+    mean_log = mean(log_ratio)) %>%
+  ggplot()+
+  geom_point(
+    aes(
+      x = log(n_changes),
+      y = mean_j
+    )
+  ) +
+  facet_wrap(~ interaction(universe_size, change_type), scales = "free_x")+
+  ggthemes::theme_few()
+
+
+```
+
+```{r}
+sim_df[sample(nrow(sim_df), 500), ] %>%
+  ggplot()+
+  geom_point(
+    aes(
+      x = log(n_changes),
+      y = j_dissim,
+      col = log(AOO_1)
+    )
+  ) +
+  facet_wrap(~ interaction(universe_size, change_type), 
+             scales = "fixed")+
+  ggthemes::theme_few()
+```
+
+```{r}
+
+sim_df %>%
+  filter(universe_size == "10") %>%
+  ggplot()+
+  geom_point(
+    aes(
+      x = n_changes,
+      y = j_dissim
+    )
+  ) +
+  facet_wrap(~ change_type, 
+             scales = "fixed")+
+  ggthemes::theme_few()
+
+sim_df %>%
+  filter(universe_size == "100") %>%
+  ggplot()+
+  geom_point(
+    aes(
+      x = n_changes,
+      y = j_dissim
+    )
+  ) +
+  facet_wrap(~ change_type, 
+             scales = "fixed")+
+  ggthemes::theme_few()
+
+sim_df %>%
+  filter(universe_size == "1000") %>%
+  ggplot()+
+  geom_point(
+    aes(
+      x = n_changes,
+      y = j_dissim
+    )
+  ) +
+  facet_wrap(~ change_type, 
+             scales = "fixed")+
+  ggthemes::theme_few()
+
+```
+
+```{r}
+ggplot(sim_df, aes(x = a, y = j_dissim)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess") +
+  facet_wrap(~change_type) +
+  theme_bw()
+
+```
+
+```{r}
+library(mgcv)
+
+# fit gam
+gam_mod <- gam(j_dissim ~ s(a) + s(b) + s(c) + s(d) + s(universe_size, k = 3) + change_type, data = sim_df)
+
+# plot smoothed effects
+plot(gam_mod, pages = 1)
+
+```
+
+```{r}
+
+# significances R2 = 0.91
+summary(gam_mod)
+
+# fitted vs. observed
+plot(gam_mod$fitted.values, sim_df$j_dissim)
+abline(0, 1, col = "red")
+
+```
+
+```{r}
+install.packages("gratia")  # if not already installed
+library(gratia)
+draw(gam_mod)
+
+
+```
+
+```{r}
+
+smooths_df <- smooth_estimates(gam_mod)
+plot_smooths(gam_mod)  # includes faceting, labels
+
+library(ggplot2)
+plot_data <- gratia::smooth_estimates(gam_mod, smooth = "s(a)")
+
+ggplot(plot_data, aes(x = .smooth, y = .estimate)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = .estimate - .se, ymax = .estimate + .se), alpha = 0.3) +
+  labs(x = "a (shared occupancy)", y = "Partial effect on Jaccard dissimilarity",
+       title = "Smooth effect of a on j_dissim") +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+ggplot(sim_df, aes(x = gam_mod$fitted.values, y = j_dissim)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, col = "red") +
+  labs(x = "Predicted Jaccard dissimilarity",
+       y = "Observed Jaccard dissimilarity") +
+  theme_classic()
+
+
+
+```
+
+```{r}
+library(gratia)
+library(ggplot2)
+library(dplyr)
+library(purrr)
+
+# Get all smooth terms (excluding factor-level effects)
+smooth_names <- gratia::smooths(gam_mod)
+
+# Get residuals and predicted values
+sim_df$residuals <- residuals(gam_mod)
+sim_df$fitted <- fitted(gam_mod)
+
+# Loop through each smooth term
+plots <- map(smooth_names, function(sm) {
+  
+  sm_df <- gratia::smooth_estimates(gam_mod, smooth = sm)
+  
+  # Extract the underlying variable name (e.g., s(a) → a)
+  varname <- gsub("s\\((.*)\\)", "\\1", sm)
+  
+  # Join sim_df to get change_type and raw x values
+  sm_df <- sm_df %>%
+    rename(!!varname := x) %>%
+    left_join(sim_df[, c(varname, "change_type")], by = varname) %>%
+    distinct()
+  
+  ggplot(sm_df, aes_string(x = varname, y = "est")) +
+    geom_line() +
+    geom_ribbon(aes(ymin = est - se, ymax = est + se), alpha = 0.3) +
+    facet_wrap(~change_type, scales = "free_x") +
+    labs(
+      x = varname,
+      y = "Effect on j_dissim",
+      title = paste("Smooth effect of", varname, "by change_type")
+    ) +
+    theme_minimal()
+})
+
+# Display all plots
+plots
+
+```
+
+```{r}
+library(ggplot2)
+ggplot(sim_df, aes(x = a, y = b, fill = j)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  facet_wrap(~ change_type) +
+  theme_minimal()
+
+```
+
+## Old
+
+```{r}
+
+# Summary stats
+head(jaccard_df)
+str(jaccard_df)
+jaccard_df %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, ) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            mean_unique_1 = mean(unique_1),
+            mean_unique_2 = mean(unique_2),
+            .groups = "keep")
+
+
+# J ~ n_changes * universe_size * change_type * AOO_1
+p1 <- jaccard_df %>%
+  ggplot()+
+  aes(y = jaccard, x = num_changes/length)+
+  facet_wrap(vars(length, flip_type))+
+  geom_point(aes(col = log(N_occu_1)))+
+  geom_smooth()+
+  scale_color_viridis_c(option = "viridis", direction = 1)+
+  theme_linedraw()
+
+p2 <- jaccard_df %>%
+  ggplot()+
+  aes(y = jaccard, x = log(num_changes))+
+  facet_wrap(vars(length, flip_type))+
+  geom_point(aes(col = log(N_occu_1)))+
+  geom_smooth()+
+  scale_color_viridis_c(option = "viridis", direction = 1)+
+  theme_linedraw()
+
+plot_grid(p1,p2, labels = "auto")
+
+# J ~ AOO_1 * N-changes * universe_size * flip_type
+
+# Visualization
+jaccard_df %>%
+  ggplot(aes(y = jaccard, x = log(N_occu_1), col = log(num_changes))) +
+  geom_point(alpha = 0.3) +
+  #geom_line(alpha = 0.3) +
+  facet_wrap(flip_type ~ length) +
+  theme_classic()
+
+ggplot(jaccard_df) +
+  aes(x = floor(log(N_occu_1)), y = jaccard, colour = log(num_changes)) +
+  geom_point(size = 2.5, shape = "circle small") +
+  geom_line(aes(group = log(num_changes)), linewidth = 0.75) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  #scale_x_continuous(trans = "log") +
+  labs(
+    x = "log(Number of initially occupied sites)",
+    y = "Jaccard Similarity",
+    title = "Jaccard ~ Number of initially occupied sites",
+    color = "log(Number of changes)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10L),
+    axis.text.x = element_text(size = 10L)
+  ) +
+  facet_wrap(vars(flip_type, length))
+
+
+jaccard_df %>%
+  ggplot(aes(y = jaccard, x = log(N_occu_1), col = num_changes, group = num_changes)) +
+  geom_point(alpha = 1/3) +
+  geom_line(alpha = 1/3) +
+  facet_wrap(flip_type ~ length) +
+  theme_linedraw()
+
+
+jaccard_df %>% filter(length == 10, num_changes == 1, flip_type == "from_1_to_0") %>%
+  ggplot()+
+  aes(y = jaccard, x = N_occu_1) +
+  geom_line()+
+  geom_point()
+
+
+
+jaccard_df %>% filter(num_changes < length-(length*0.1)) %>%
+  ggplot(aes(y = jaccard, x = log(occu1), col = num_changes, group = num_changes))+
+  geom_point(alpha = 1/3)+
+  geom_line(alpha = 1/3)+
+  facet_wrap(flip_type~length)+
+  theme_classic()
+
+ggplot(jaccard_df) +
+  aes(x = floor(log(N_occu_1)), y = jaccard, colour = log(num_changes)) +
+  geom_point(size = 2.5, shape = "circle small") +
+  geom_line(aes(group = log(num_changes)), linewidth = 0.75) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  #scale_x_continuous(trans = "log") +
+  labs(
+    x = "log(Number of initially occupied sites)",
+    y = "Jaccard Similarity",
+    title = "Jaccard ~ Number of initially occupied sites",
+    color = "log(Number of changes)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10L),
+    axis.text.x = element_text(size = 10L)
+  ) +
+  facet_wrap(vars(flip_type, length))
+
+
+jaccard_df %>%
+  filter(flip_type == "random") %>% filter(num_changes < length-(length*0.1)) %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  #geom_line()+
+  theme_linedraw()
+
+
+jaccard_df %>%
+  filter(flip_type == "from_1_to_0") %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =log(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  geom_line()+
+  theme_linedraw()
+
+
+jaccard_df %>%
+  group_by(jaccard, flip_type, length, intersect, unique_1, unique_2, N_occu_1, N_occu_2) %>%
+  summarize(mean_num_changes = mean(num_changes),
+            sd_num_changes = sd(num_changes),
+            .groups = "keep") %>%
+  ggplot(aes(y=jaccard, x =log(N_occu_1), group = length, col = (mean_num_changes)), alpha = 0.1)+
+  geom_jitter()+
+  #geom_line()+
+  theme_linedraw()+
+  facet_wrap(~flip_type)
+
+
+# J ~ log(n_changes)
+p_l <- lapply(unique(jaccard_df$length), function(length_i) {
+  lapply(unique(jaccard_df$flip_type), function(type_i) {
+    jaccard_df %>%
+      filter(length == length_i, flip_type == type_i) %>%
+      ggplot(aes(y = jaccard, x = log(num_changes), col = log(N_occu_1))) +
+      geom_point() +
+      geom_line(aes(group = log(N_occu_1)))+
+      scale_color_viridis_c(option = "viridis", direction = 1) +
+      labs(
+        title = "Jaccard ~ log Number of changes",
+        subtitle = paste0("Length = ", length_i, ", Flip Type = ", type_i)
+      )
+  }) %>% setNames(unique(jaccard_df$flip_type))  # Name the inner list by flip_type
+}) %>% setNames(unique(jaccard_df$length))  # Name the outer list by length
+
+
+plot_grid(plotlist = unlist(p_l, recursive = FALSE), ncol = 2)
+ggsave("jaccard_nchanges_grid.pdf", last_plot(), device = "pdf")
+
+
+jaccard_df %>% 
+  mutate(log_num_changes = log(num_changes),
+         log_N_occu_1 = log(N_occu_1)) %>%
+  filter(flip_type == "random")%>%
+  ggplot(aes(y = jaccard, x = log_num_changes, col = log_N_occu_1))+
+  geom_point()+
+  geom_line(aes(group = N_occu_1))+
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  facet_wrap(~ length, scales = "free")+
+      labs(
+        title = "Jaccard ~ log Number of changes")+
+  theme_minimal()
+
+jaccard_df %>%   
+  mutate(log_num_changes = log(num_changes),
+         log_N_occu_1 = log(N_occu_1)) %>% 
+  filter(flip_type == "random") %>%
+    ggplot(aes(y = jaccard, x = log_num_changes, col = factor(N_occu_1)))+
+  geom_point()+
+  geom_line(aes(group = interaction(N_occu_1, N_occu_2)))+
+  scale_color_viridis_d(option = "viridis", direction = 1) +
+  facet_wrap(~ length, scales = "free")+
+      labs(
+        title = "Jaccard ~ log Number of changes")+
+  theme_minimal()
+
+
+
+# List all grouping variables
+group_vars <- c("length", "flip_type", "num_changes", "N_occu_1")
+
+# Split data by unique combinations of the four variables
+df_list <- split(jaccard_df, jaccard_df[group_vars])
+
+# Apply the plotting function over each subset
+p_l <- lapply(df_list, function(df_subset) {
+  ggplot(df_subset, aes(y = jaccard, x = N_occu_1, col = log(num_changes))) +
+    geom_point() +
+    labs(
+      title = "Jaccard ~ Number of Occupied Sites",
+      subtitle = paste0(
+        "Length = ", unique(df_subset$length), ", ",
+        "Flip Type = ", unique(df_subset$flip_type), ", ",
+        "Var3 = ", unique(df_subset$var3), ", ",
+        "Var4 = ", unique(df_subset$var4)
+      )
+    )
+})
+
+plot_grid(plot_list = p_l)
+```
+
+```{r}
+## Heat maps
+res_proportional <- jaccard_df %>% select(-occu1, -run) %>%
+  group_by(length, flip_type, num_changes) %>%
+  mutate(prop_occu_1 = N_occu_1/length,
+         prop_occu_2 = N_occu_2/length,
+         prop_intersect = intersect/length,
+         prop_union = sum(unique_1, unique_2, intersect)/length)
+
+res_proportional
+
+
+# Create a heatmap plot
+ggplot(jaccard_df %>% filter(flip_type == "random"), aes(x = N_occu_2, y = N_occu_1, fill = jaccard)) +
+  geom_tile(color = "white") + # Add gridlines
+  scale_fill_gradient(low = "blue", high = "red", name = "Expected Jaccard") +
+  labs(
+    title = "Expected Jaccard Similarity",
+    subtitle = "Based on Set Occupancy and Universe Size",
+    x = "Set 2 Occupancy",
+    y = "Set 1 Occupancy"
+  ) +
+  theme_minimal() +
+  facet_wrap(~factor(length))+
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+
+```

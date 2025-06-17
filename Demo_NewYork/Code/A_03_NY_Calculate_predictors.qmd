@@ -1,0 +1,905 @@
+---
+title: "Predictors NY"
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    toc: true          # optional: adds a table of contents
+    theme: cosmo       # optional: Bootstrap theme
+    code-fold: show    # optional: collapsible code blocks
+    code-tools: true   # optional: adds copy/paste buttons
+    toc-depth: 2  
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+In the following we match external data to our species.
+1. Avonet traits [1]
+2. Phylogenetic distinctiveness [2,3]
+3. IUCN threat status[4]
+4. Range geometry
+5. Spatial autocorrelation [5]
+6. Lacunarity
+7. Global range size [6]
+
+Finally, we merge all predictors together.
+
+```{r}
+#| warning: false
+#| message: false
+#| error: false
+
+rm(list=ls())
+gc()
+suppressPackageStartupMessages({
+library(here)
+library(dplyr)
+library(skimr)
+library(readxl)
+library(tictoc)
+
+# Phylo distinct
+library(ape)
+library(phyloregion)
+
+# IUCN
+library(taxize)
+
+# Range geometry
+library(sf)
+library(tidyverse)
+library(purrr)
+library(terra)
+library(broom)
+library(geosphere)
+
+# Spatial autocorrelation
+
+library(spdep)
+library(rstatix)
+# install.packages("spdep", repos = "https://cloud.r-project.org/") # if not installed
+
+
+})
+```
+
+### Paths
+
+```{r}
+#| warning: false
+#| message: false
+#| error: false
+
+data_sf_path <- 
+  here("Demo_NewYork/Data/output/1_data_sf_ny.rds")
+
+sp_data_path <- 
+  here("Demo_NewYork/Data/output/1_data_filtered_ny.rds")
+
+tax_path <-
+  here("Demo_NewYork/Data/input/Tax_lookup_ny.csv")
+
+avonet_path <- 
+  here("Demo_NewYork/Data/input/AVONET Supplementary dataset 1.xlsx")
+
+tree_path <- 
+   here("Demo_NewYork/Data/input/MRC_consensus_BirdTree.tre")
+```
+
+### Avonet traits
+
+-   Download AVONET Supplementary dataset 1.xlsx here ([[1] Tobias et al. (2022)](https://figshare.com/s/b990722d72a26b5bfead?file=34480856))
+
+-   We placed it here: `Demo_NewYork/Data/input/AVONET Supplementary dataset 1.xlsx` (see path above)
+
+
+```{r}
+#----------------------------------------------------------#
+# Load data  -----
+#----------------------------------------------------------#
+
+# filtered species list
+sci_name <-
+  readRDS(sp_data_path) %>%
+  distinct(verbatimIdentification, scientificName) # BirdLife 2024 taxonomy
+
+# taxonomic crosswalk with BirdLife 2018 taxonomy as used in Avonet
+Tax <- 
+  read.csv2(tax_path) %>%
+  select(verbatimIdentification, scientificName, ScientificName2018)%>%
+  filter(verbatimIdentification %in% sci_name$verbatimIdentification) %>%
+  distinct(verbatimIdentification, scientificName, .keep_all=TRUE)
+
+# Extract traits from Avonet
+traits <-
+  readxl::read_excel(avonet_path, sheet = "AVONET1_BirdLife")  %>%
+  dplyr::select(
+    Species1, Mass,
+    Habitat, Migration, Primary.Lifestyle) %>%
+  mutate(
+    across(c(Habitat, Migration, Primary.Lifestyle),
+           as.factor)) 
+
+# Merge with species names
+traits_merged <- traits %>%
+  rename("ScientificName2018" = "Species1") %>%
+  right_join(Tax) %>%
+  select(-ScientificName2018) %>%
+  distinct(verbatimIdentification, scientificName, .keep_all = TRUE)
+
+# checks:
+traits_merged %>% skimr::skim() # 3 missing
+
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","tree_path","sci_name","traits_merged")))
+```
+
+### Phylogenetic distinctiveness
+
+This requires the BirdTree [2] tree file, which can be downloaded from [here](https://birdtree.org/). We use the consensus tree that we created based on recommendations from [3]. 
+We placed the tree file here: `Demo_NewYork/Data/input/MRC_consensus_BirdTree.tre` (see path above).
+
+```{r}
+
+Tax <- read.csv2(tax_path)[2:7] %>%
+  filter(verbatimIdentification %in% sci_name$verbatimIdentification)
+tree <- read.tree(tree_path)
+
+
+# pd for all species in the tree
+pd <-
+  phyloregion::evol_distinct(
+  tree,
+  type = "fair.proportion",
+  scale = FALSE,
+  use.branch.lengths = TRUE) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "tip.label") %>%
+  rename(pd = ".") %>%
+  right_join(Tax) %>%
+  select(verbatimIdentification, scientificName, pd) %>%
+  filter(verbatimIdentification %in% sci_name$verbatimIdentification) %>%
+  distinct(scientificName, verbatimIdentification, .keep_all=T)
+
+# checks
+colSums(is.na(pd)) # 3 species not matched
+pd %>% 
+  filter(is.na(pd)) %>% 
+  pull(verbatimIdentification)
+
+hist(pd$pd, breaks = 30, 
+  main = "Phylogenetic Distinctiveness distribution", 
+  xlab = "Phylogenetic Distinctiveness")
+
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd")))
+```
+
+### IUCN Threat status
+
+For this part we need a personal API key to access the IUCN Red List API. You can get one from [here](https://api.iucnredlist.org/). There you have to sign up with an account and request an API token. Once you have it, you can either set it as an environment variable in an .Renviron file e.g., `IUCN_REDLIST_KEY = [key]` or paste it directly into the code below.
+
+- [4] IUCN (2025)
+
+```{r}
+#| warning: false
+#| message: false
+#| error: false
+
+# Download status via Red List API (acces through taxize)
+tictoc::tic()
+
+IUCN.list <-
+  suppressMessages(iucn_summary(unique(sci_name$scientificName),
+    distr.detail = F,
+    key =" DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
+    #key = Sys.getenv("IUCN_REDLIST_KEY") # Replace with your API KEY
+  ))
+tictoc::toc() # 179.11 sec elapsed
+
+
+
+# Extract codes and bind to dataframe
+IUCN <- 
+  lapply(names(IUCN.list), function(name) {
+  item <- IUCN.list[[name]]
+
+  # Check if the element is a list and contains `red_list_category`
+  if (is.list(item) && 
+      !is.null(item$red_list_category) && 
+      !is.null(item$red_list_category$code)) {
+    
+    return(
+      data.frame(
+        name = name, 
+        code = item$red_list_category$code, 
+        stringsAsFactors = FALSE)
+      )
+    
+  } else {
+    return(
+      data.frame(
+        name = name, 
+        code = NA, 
+        stringsAsFactors = FALSE)
+      ) # Fill missing with NA
+  }
+}) %>% 
+  do.call(rbind, .) # bind rows to dataframe
+
+# Check NA species: 10 species not found
+species_with_NA <-
+  IUCN %>% 
+  filter(is.na(code))
+
+# try again with those that were not found:
+IUCN.list2 <-
+  suppressMessages(iucn_summary(unique(species_with_NA$name),
+    distr.detail = F,
+    key =" DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
+    #key = Sys.getenv("IUCN_REDLIST_KEY")
+  ))
+# 3 species not found of which 2 are hybrids and Nannopterium auritus which we will look up manually and assign the status by hand
+
+IUCN2 <- lapply(names(IUCN.list2), function(name) {
+  item <- IUCN.list2[[name]]
+
+  # Check if the element is a list and contains `red_list_category`
+  if (is.list(item) && 
+      !is.null(item$red_list_category) && 
+      !is.null(item$red_list_category$code)) {
+    return(
+      data.frame(
+        name = name, 
+        code = item$red_list_category$code, #
+        stringsAsFactors = FALSE)
+      )
+  } else {
+    return(
+      data.frame(
+        name = name, 
+        code = NA, 
+        stringsAsFactors = FALSE)
+      ) # Fill missing with NA
+  }
+}) %>% 
+  do.call(rbind, .)
+
+
+# Merge Results 1 and Results 2
+IUCN_merged <- 
+  rbind(IUCN %>% na.omit(), IUCN2) %>%
+  unique() %>%
+  # assign code to Nannopterum auritus by hand - because it is on IUCN.
+  mutate(code = case_when(name == "Nannopterum auritus" ~ "LC",
+    .default = code
+  ))
+
+# checks: only the two hybrids left
+IUCN_merged %>% 
+  filter(is.na(code))
+
+# Reshape
+IUCN_df <-
+  as.data.frame(IUCN_merged,
+    row.names = c(IUCN_merged$name)
+  ) %>%
+  tibble::rownames_to_column(var = "scientificName") %>%
+  right_join(sci_name) %>%
+  distinct(verbatimIdentification, scientificName, code)
+
+table(IUCN_df$code)
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df")))
+```
+
+### Range geometry 
+
+```{r}
+# Functions:
+## Normalized circularity function (written by Gabriel Ortega Solís)
+circNorm <- function(x){
+    perimeter <- perim(x)
+    area <- expanse(x)
+    res <- (perimeter^2) / (4 * pi * area)
+    return(res)
+}
+
+## Smallest distance from the range centroid to the atlas border
+minDist <- function(centroid, borders){
+  res <- min(
+    distance(
+      crds(centroid), 
+      crds(borders), 
+      lonlat = F)
+    )
+  return(res)
+}
+
+# s2 settings:
+sf_use_s2(FALSE) # we use planar projections (i.e., in metres) so this can be turned off
+
+#----------------------------------------------------------#
+# Load data -----
+#----------------------------------------------------------#
+
+data_sf <-
+  readRDS(data_sf_path) %>%
+  filter(scalingID == 1 & 
+           cells_keep == 1) 
+
+#----------------------------------------------------------#
+# Atlas geometries  -----
+#----------------------------------------------------------#
+
+sf_current_atlas <- 
+  data_sf %>% 
+  filter(samplingPeriodID == 1) %>%
+  select(geometry) %>%
+  st_as_sf() %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_transform(crs = unique(data_sf$verbatimFootprintSRS)) %>%
+  st_make_valid()
+
+plot(sf_current_atlas)
+
+# vectorize atlas
+terra_current_atlas <- vect(sf_current_atlas)
+
+plot(terra_current_atlas)
+
+# Store borders as lines
+atlas_border_lines <- terra::as.lines(terra_current_atlas)
+
+#----------------------------------------------------------#
+# Single species range geometries  -----
+#----------------------------------------------------------#
+
+grouped_list <- 
+  data_sf %>% 
+  group_by(samplingPeriodID, verbatimIdentification) %>%
+  filter(species_keep == 1) %>%
+  group_split()
+
+tictoc::tic()
+range_geometries <- map_dfr(grouped_list, function(dta) {
+  
+  sp_range <- 
+    dta %>%
+      dplyr::select(geometry, siteID, datasetID) %>%
+      st_transform(crs = st_crs(atlas_border_lines)) %>%
+      summarise() %>%
+      terra::vect()
+  
+  sp_range_centroid <- 
+    centroids(sp_range)
+  
+  # checks
+  # plot(sp_range); plot(sp_range_centroid, add = T, col = "red")
+  
+  # Compute range attributes
+  tibble(
+    datasetID = unique(dta$datasetID),
+    samplingPeriodID = unique(dta$samplingPeriodID),
+    verbatimIdentification = unique(dta$verbatimIdentification),
+    circNorm = circNorm(sp_range), 
+    minDist_toBorder_centr = minDist(sp_range_centroid, atlas_border_lines)
+    )
+  
+})
+tictoc::toc() # 108.94 sec elapsed
+
+# checks:
+range_geometries %>% 
+  skimr::skim()
+
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df", "range_geometries")))
+```
+
+### Spatial autocorrelation
+We calculate the difference in expected and observed join counts for presences across the atlas for each species and sampling period. This is done using the `joincount.test()` function from the `spdep` package. The join count test is a measure of spatial autocorrelation that counts the number of pairs of neighboring sites that have the same value (in this case, presence or absence of a species). In the calculation of delat join count, we follow still unpublished work by Soria et al. (2025) [5]
+
+```{r}
+# CRS
+ny_crs <-"epsg:32118"  #verbatimFootprintSRS (NAD83 / New York Long Island)
+
+# Read data
+data_sf <- 
+  readRDS(data_sf_path) %>%
+  filter(scalingID == 1 &
+           cells_keep == 1 &
+           species_keep == 1) %>%
+  st_transform(crs = ny_crs)
+
+
+# calculate join count across samplingPeriods for each species
+sampling_periods <- c(1,2)
+
+# Safe versions of spatial autocorrelation functions
+safe_joincount_test <- possibly(function(x, nb) joincount.test(as.factor(x), nb2listw(nb, style = "B", zero.policy = TRUE)), otherwise = NA)
+
+tictoc::tic()
+joincount_df <- map_dfr(sampling_periods, function(sampling_period){
+  tp_subset <- 
+    data_sf %>%
+    filter(samplingPeriodID == sampling_period)
+  
+  sp_names <- 
+    tp_subset %>% 
+    st_drop_geometry() %>% 
+    distinct(verbatimIdentification) %>% 
+    pull() 
+  
+  all_sites <- 
+    data_sf %>%
+    select(siteID, geometry) %>%
+    unique()
+  
+  map_dfr(sp_names, function(sp_name){
+    
+    sp_data <- 
+      tp_subset %>%
+      st_drop_geometry() %>%
+      filter(verbatimIdentification == sp_name) %>%
+      full_join(all_sites, by = "siteID") %>%
+      mutate(
+        presence = if_else(is.na(verbatimIdentification), 0, 1),
+        verbatimIdentification = sp_name) %>%
+      st_as_sf()
+    
+    # checks:
+    # plot(sp_data["presence"])
+    
+    # Count the number of presences
+    num_pres <- sum(sp_data$presence, na.rm = TRUE)
+    
+    # Creating neighbors (queen)
+    nb_q <- spdep::poly2nb(sp_data, queen = TRUE)
+
+    # Join count test
+    jc_res_q <- safe_joincount_test(sp_data$presence, nb_q)
+    
+    # Save results in a dataframe
+    tibble(
+      samplingPeriodID = sampling_period,
+      verbatimIdentification = sp_name,
+      presence_n = num_pres,
+      joincount_statistic = ifelse(is.na(jc_res_q), NA,
+                                   jc_res_q[[2]]$estimate[1])[[1]],
+      joincount_expectation = ifelse(is.na(jc_res_q), NA,
+                                     jc_res_q[[2]]$estimate[2])[[1]],
+      joincount_p_val = ifelse(is.na(jc_res_q), NA,
+                               jc_res_q[[2]]$p.value)[[1]],
+      joincount_delta = ifelse(is.na(jc_res_q), NA,
+                               ((jc_res_q[[2]]$estimate[1] /
+                                   num_pres) -
+                                  (jc_res_q[[2]]$estimate[2] /
+                                     num_pres)))[[1]]
+      ) %>%
+      unique()
+
+    
+  })
+  
+})
+
+tictoc::toc() # 1376.94 sec elapsed
+
+# checks:
+joincount_df %>%
+  skimr::skim()
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df", "range_geometries", "joincount_df")))
+```
+
+
+### Lacunarity
+
+```{r}
+# Load required packages
+package_list <-
+  c("here", "sf", "tidyverse", "purrr", "tictoc", "terra")
+x <-
+  lapply(package_list, require, character.only = TRUE)
+rm(x)
+
+# turn spherical geometry off (we are working with planar proj. in meters)
+sf_use_s2(FALSE) # we use data in meters
+
+# Original CRS
+ny_crs <-"epsg:32118"  #verbatimFootprintSRS (NAD83 / New York Long Island)
+
+# Read in sf data
+data_sf <- 
+  readRDS(data_sf_path) %>% 
+  filter(scalingID == 1) %>%
+  st_transform(crs = ny_crs)
+```
+
+
+```{r}
+# Prepare country template for rasterizing ----
+resolution <- c(5000, 5000) # in metres
+
+bbox_ny <- 
+  data_sf %>% 
+  select(siteID, geometry) %>%
+  unique() %>% 
+  st_bbox()
+
+country_border <-   
+  data_sf %>% 
+  select(siteID, geometry) %>%
+  unique() %>%
+  st_union() %>%
+  vect()
+
+# create masked template for rasterizing based on NY outlines
+template <- 
+  rast(
+    ext(bbox_ny$xmin, bbox_ny$xmax, bbox_ny$ymin, bbox_ny$ymax),
+    resolution = resolution,
+    crs = ny_crs)
+values(template) <- 0
+masked_template <- mask(template, country_border)
+
+# check:
+plot(masked_template)
+```
+
+
+```{r}
+# Prepare species data ----
+
+unsampled_sites_expanded <- 
+  data_sf %>%
+  filter(cell_sampling_repeats == 0) %>%
+  distinct(siteID, geometry) %>%
+  tidyr::expand_grid(samplingPeriodID = c(1,2)) %>%
+  mutate(verbatimIdentification = NA)
+
+# combine with sampled cells
+data_sf_with_unsampled <- 
+  bind_rows(
+    data_sf %>%
+      filter(cell_sampling_repeats == 2 | !is.na(verbatimIdentification)),
+    unsampled_sites_expanded
+  )
+
+# get filtered species list
+species_list <- 
+  sci_name %>% 
+  pull(verbatimIdentification) %>% 
+  unique()
+
+# rasterize ranges
+
+raster_list <- replicate(2, list())
+for (tp in seq_along(c(1,2))){
+  
+  raster_list[[tp]] <- list()
+  
+  data_tp_i <- 
+    data_sf_with_unsampled %>%
+    filter(samplingPeriodID == tp)
+  
+  for (sp_name in species_list){
+    
+    this_data <- 
+      data_tp_i %>%
+      filter(verbatimIdentification == sp_name & samplingPeriodID == tp) %>%
+      st_as_sf() %>%
+      st_transform(crs = ny_crs) %>%
+      mutate(
+        presence = 1)
+  
+  r <- 
+    rasterize(this_data, 
+              masked_template, 
+              field = "presence", 
+              update = TRUE)
+    
+  raster_list[[tp]][[sp_name]] <- r
+    
+  }
+}
+
+# example plot
+plot(r)
+  
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df", "range_geometries", "joincount_df", "raster_list")))
+gc()
+
+```
+
+```{r}
+# Calculate lacunarity across sub-lists
+#----------------------------------------------------------#
+# Function to run terra::focal() for multiple window-sizes -----
+#----------------------------------------------------------#
+apply_focal_multiple_w <- function(r, w_vec) {
+
+  results <- lapply(w_vec, function(w) {
+    f <- focal(r, w = w, fun = sum, na.policy="omit", na.rm=TRUE)
+
+    # n_S_r = number of filled cells in the box (of size r)
+    # Q_S_r = normalized frequency distribution of S for box size r
+
+    box_masses_int <- as.integer(values(f, na.rm = T))
+    max_value <- max(box_masses_int, na.rm = TRUE)
+
+    # initialize empty vector (add +1 to enable indexing with 0 values)
+    n_S_r <- integer(max_value + 1L)
+    for (val in box_masses_int) {
+      if (val >= 0 && val <= max_value) {
+        n_S_r[val + 1L] <- n_S_r[val + 1L] + 1
+      }
+    }
+    Q_S_r <- n_S_r / length(box_masses_int[!is.na(box_masses_int)])
+    S_vals <- seq_along(Q_S_r) - 1
+    Z_1 <- sum(S_vals * Q_S_r) #first moment = mean
+    Z_2 <- sum((S_vals^2) * Q_S_r) # second moment = variance (mean of squared values)
+
+    if (Z_1 == 0) {
+      return(NA_real_)
+    }
+    lac <- Z_2 / (Z_1 * Z_1)
+
+    return(lac)
+  })
+
+
+  names(results) <- paste0("w=", w_vec)
+ r_name <- sp_name
+  message(r_name, ": done")
+  # lac_res <- data.frame(lac = do.call(rbind, results), w = w_vec, species = r_name)
+  # return(lac_res)
+
+
+  this_out <- dplyr::tibble(name = rep(r_name, length(results)),
+                            r = w_vec, "ln(r)" = log(w_vec),
+                            Lac = results %>% do.call(rbind,.) %>% .[,1], "ln(Lac)" = log(results %>% do.call(rbind,.) %>% .[,1]))
+  return(this_out)
+}
+```
+
+```{r}
+#----------------------------------------------------------#
+# Run focal function across multiple window-sizes -----
+#----------------------------------------------------------#
+
+w_vec <- c(3L, 5L, 9L, 17L, 33L) # window sizes
+
+tictoc::tic()
+res_list <- replicate(2, list())
+
+for (tp_i in seq_along(raster_list)){
+  res_list[[tp_i]] <- list()
+  for(sp_i in seq_along(raster_list[[tp_i]])){
+    
+    sp_name <- names(raster_list[[tp_i]])[sp_i]
+    r <- raster_list[[tp_i]][[sp_i]]
+    test_res <- apply_focal_multiple_w(r, w_vec)
+    
+    # add species info
+    test_res$samplingPeriodID <- tp_i
+    test_res$verbatimIdentification <- sp_name
+    
+    
+    res_list[[tp_i]][[sp_i]] <- test_res
+  }
+}
+tictoc::toc() # 96.32 sec elapsed
+
+df_res1 <- do.call(rbind, res_list[[1]])
+df_res2 <- do.call(rbind, res_list[[2]])
+
+lac_results <- 
+  rbind(df_res1, df_res2) %>% 
+  select(-name) %>%
+  as.data.frame()
+
+names(lac_results) <- c("r", "ln(r)", "lac", "ln(lac)", "samplingPeriodID", "verbatimIdentification")
+
+
+# Calculate mean across increasing window sizes
+mean_lac <- lac_results %>%
+  ungroup() %>%
+  group_by(samplingPeriodID, verbatimIdentification) %>%
+  summarize(mean_lnLac = mean(`ln(lac)`, na.rm = TRUE), .groups = "keep") 
+
+
+hist(mean_lac$mean_lnLac, breaks = 30, 
+     main = "Lacunarity distribution", 
+     xlab = "Mean Lacunarity (ln)")
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df", "range_geometries", "joincount_df", "mean_lac")))
+gc()
+
+```
+
+### Global range size
+We again use the BirdLife range polygons [6], which can be downloaded from [here](http://datazone.birdlife.org/species/requestdis). We use the Mollweide projection to calculate the global range size in km². The BirdLife shapefile is in WGS84, so we transform it to Mollweide before calculating the area.
+
+```{r}
+#| eval: true
+#| include: true
+
+# planar CRS
+Mollweide_CRS <- 
+'PROJCS["ProjWiz_Custom_Mollweide",
+ GEOGCS["GCS_WGS_1984",
+  DATUM["D_WGS_1984",
+   SPHEROID["WGS_1984",6378137.0,298.257223563]],
+  PRIMEM["Greenwich",0.0],
+  UNIT["Degree",0.0174532925199433]],
+ PROJECTION["Mollweide"],
+ PARAMETER["False_Easting",0.0],
+ PARAMETER["False_Northing",0.0],
+ PARAMETER["Central_Meridian",0],
+ UNIT["Meter",1.0]]'
+
+sf_use_s2(FALSE)
+
+# Taxonomic match table
+Tax <- 
+  sci_name # Taxa
+
+# Global ranges
+tictoc::tic()
+BirdLife_split <- 
+  st_read(here("Data/input/shp_global/BirdLife.shp"), quiet = TRUE)%>% 
+  filter(sci_name %in% c(Tax$scientificName)) %>%
+  st_transform(crs = Mollweide_CRS)%>%
+  group_by(sci_name) %>%
+  st_make_valid() %>% # takes a while...
+  group_by(sci_name) %>% 
+  group_split()
+  
+
+# loop through list and sum up the combined range areas for each species
+range_size_df <- 
+  map_dfr(BirdLife_split, function(this_species){
+    
+    message(paste0(unique(this_species$sci_name), "... done!"))
+  
+    this_species %>%
+      group_by(sci_name) %>%
+      summarise(.groups = "keep") %>%
+      # Convert to km²
+      group_by(sci_name) %>%
+      mutate(GlobRangeSize_km2 = as.numeric(st_area(.))/ 1e6) %>%  
+      st_drop_geometry()%>%
+      rename(scientificName = sci_name)
+  
+    
+    })
+tictoc::toc()
+ 
+# Merge with verbatimIdentification
+range_size_df2 <- 
+  range_size_df %>%
+  right_join(Tax, by = "scientificName") %>%
+  distinct(scientificName, verbatimIdentification, .keep_all = TRUE) 
+
+# checks
+colSums(is.na(range_size_df2))
+range(range_size_df2$GlobRangeSize_km2, na.rm=TRUE)
+hist(log(range_size_df2$GlobRangeSize_km2))
+
+
+
+rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","traits_merged", "pd", "IUCN_df", "range_geometries", "joincount_df", "mean_lac", "range_size_df2")))
+gc()
+```
+
+## Merge Predictors together
+```{r}
+# Set 1: External data
+predictors_1 <- 
+  full_join(range_size_df2, traits_merged) %>%
+  full_join(IUCN_df %>% mutate(code = as.factor(code)) %>% rename("IUCN" = "code")) %>%
+  full_join(pd) %>%
+  distinct(verbatimIdentification, .keep_all = TRUE)
+
+colSums(is.na(predictors_1))
+glimpse(predictors_1)
+
+# Set 2: Calculated from atlas
+
+big_table <- 
+  readRDS(here("Demo_NewYork/Data/output/A_Big_table_ny.rds"))
+
+predictors_2 <- 
+  full_join(big_table, joincount_df) %>%
+  full_join(range_geometries) %>%
+  full_join(mean_lac) %>%
+  distinct(samplingPeriodID, verbatimIdentification, .keep_all = TRUE)
+
+colSums(is.na(predictors_2))
+glimpse(predictors_2)
+```
+
+#### Modify predictors for modeling 
+```{r}
+# Merge together
+data_final <- 
+  full_join(predictors_2, predictors_1) %>%
+  filter(samplingPeriodID == 1) %>%
+  mutate(
+    across(
+      where(is.character) & 
+        !matches("verbatimIdentification") & 
+        !matches("scientificName"),
+      as.factor)) %>%
+  mutate(
+    across(
+      c("Habitat", "IUCN", "Migration", "Primary.Lifestyle"),
+      as.factor)) %>%
+  distinct(verbatimIdentification, .keep_all = TRUE) %>%
+  ungroup() %>%
+  mutate(
+    Habitat_5 = 
+      as.factor(
+        case_when(
+          Habitat %in% c("Grassland", "Shrubland", 
+                         "Desert", "Rock") ~ "open",
+          Habitat %in% c("Woodland", "Forest") ~ "closed",
+          Habitat %in% c("Coastal", "Marine") ~ "marine",
+          Habitat %in% c("Wetland", "Riverine") ~ "freshwater",
+          Habitat == "Human Modified" ~ "human",
+          .default = NA_character_)
+        )
+    ) %>%
+  mutate(
+    Generalism = 
+      as.factor(
+        case_when(
+          Primary.Lifestyle == "Generalist" ~ 1,
+          .default = 0)
+        )
+    ) %>%
+  mutate(
+    Threatened = 
+      as.factor(
+        case_when(
+          IUCN %in% c("LC") ~ 0,
+          is.na(IUCN) ~ NA,
+          .default = 1)
+        )
+    ) %>%
+  select(
+    verbatimIdentification, scientificName, 
+    log_R2_1, log_R2_1_per_year, Jaccard_dissim, 
+    D_AOO_a, AOO, joincount_delta, mean_lnLac,
+    circNorm, minDist_toBorder_centr, 
+    GlobRangeSize_km2, Mass, Migration, 
+    pd, Habitat_5, Generalism, Threatened
+  )
+
+
+data_final %>% 
+  skimr::skim()
+
+
+write.csv(data_final, here::here("Demo_NewYork/Data/output/data_final_ny.csv"))
+
+```
+
+## References
+
+[1] Tobias, J. A., Sheard, C., Pigot, A. L., Devenish, A. J., Yang, J., Sayol, F., Neate-Clegg, M. H., Alioravainen, N., Weeks, T. L., Barber, R. A., & others. (2022). AVONET: morphological, ecological and geographical data for all birds. Ecology Letters, 25(3), 581–597.
+
+
+[2] Jetz, W., Thomas, G. H., Joy, J. B., Hartmann, K., & Mooers, A. O. (2012). The global diversity of birds in space and time. Nature, 491(7424), 444–448.
+
+[3] Rubolini, D., Liker, A., Garamszegi, L. Z., Møller, A. P., & Saino, N. (2015). Using the BirdTree.org website to obtain robust phylogenies for avian comparative studies: A primer. Current Zoology, 61(6), 959–965. https://doi.org/10.1093/czoolo/61.6.959
+
+[4] IUCN (2025). The IUCN Red List of Threatened Species. Version 2025-1. https://www.iucnredlist.org. Accessed 14 June 2025.
+
+[5] Soria, C. D., Ortega-Solís, G. R., Wölke, F. J. R., Barták, V., Tschernosterová, K., Bejček, V., Herrando, S., Mikuláš, I., Šťastný, K., Ueta, M., Voříšek, P., & Keil, P. (in preparation). Spatial autocorrelation of species diversity and distributions in time and across spatial scales.
+
+[6] BirdLife International & Handbook of the Birds of the World. (2024). Bird species distribution maps of the world (Version 9.0) [Dataset]. http://datazone.birdlife.org/species/requestdis
+

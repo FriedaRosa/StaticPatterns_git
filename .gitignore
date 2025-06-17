@@ -19,3 +19,9 @@
 *.csv
 /Manuscript
 /Git/Data/input/species_ranges_tiff
+/Data/input/shp_global
+/Data/input/shp_introduced
+Demo_NewYork/Data/input/MRC_consensus_BirdTree.tre
+Data/input/MRC_consensus_BirdTree.tre
+*.rmarkdown
+*.Rproj

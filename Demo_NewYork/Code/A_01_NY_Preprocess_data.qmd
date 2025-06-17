@@ -1,0 +1,394 @@
+---
+title: "Demonstration: New York"
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    toc: true          # optional: adds a table of contents
+    theme: cosmo       # optional: Bootstrap theme
+    code-fold: show    # optional: collapsible code blocks
+    code-tools: true   # optional: adds copy/paste buttons
+    toc-depth: 2  
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Data preparation (by Gabriel Ortega Solís)
+
+Since most data we used here come with restricted rights of sharing, we
+set up a workflow for the New York Breeding Bird atlas, which is freely
+available from the website: https://www.dec.ny.gov/animals/7312.html
+
+We processed the original New York BBA data into a common format with
+the other atlases that we used. The structure is therefore a bit
+different from the original data. These steps are not necessary to
+repeat the analysis but it shows how the data was formated after
+downloading it. Multiple steps in between were done manually by hand to
+standardize all BBAs to the same format - these cannot be reproduced
+with the code chunk below. The code below is just for documentation. We
+provide .rds files with the prepared (standardized) data used for our
+study below.
+
+```{r}
+#| eval: false
+#| include: true
+#| code-fold: true
+
+# libraries for preparation only:
+
+pacman::p_load(
+  sf, terra, data.table, tidyverse, tidyterra, tidytable, knitr,
+  tictoc, RPostgres, DBI, dbplyr, parallel,
+  geodata
+)
+
+
+# Variables
+seldata <- "data/4processedAtlases/Birds_Atlas_New_York"
+datasetID <- 6
+licenseID <- 1
+verbatimFootprintSRS <- "epsg:26918"
+
+# Data processing
+dataset <- readRDS(paste0(seldata, "_beast_data.rds")) %>% as.data.table()
+
+spnamesinfo <- read.csv(paste0(seldata, "_data_INFO_spnames.csv")) %>%
+  as.data.table() %>%
+  mutate(cellID = str_split(cellID, pattern = ",")) %>%
+  unnest(cellID) %>%
+  select(cellID, name_in_data, original_verbatim_name) %>%
+  mutate(cellID = cellID) %>%
+  unique()
+
+grid <- st_layers(paste0(seldata, "_grid.gpkg"))$name %>%
+  sapply(., USE.NAMES = T, simplify = F, function(x) {
+    st_read(paste0(seldata, "_grid.gpkg"), layer = x)
+  })
+
+corrs <- readRDS(paste0(seldata, "_cells_corr.rds")) %>%
+  as.data.table() %>%
+  pivot_longer(-cellID, names_to = "cell_grouping", values_to = "cell_label") %>%
+  mutate(cell_grouping = as.numeric(cell_grouping))
+
+full_data <- left_join(dataset, corrs, by = c("cell_grouping", "cell_label"), relationship = "many-to-many") %>%
+  left_join(., filter(spnamesinfo, !is.na(cellID)), by = c("cellID" = "cellID", "verbatim_name" = "name_in_data")) %>%
+  mutate(verbatim_name = ifelse(is.na(original_verbatim_name), verbatim_name, original_verbatim_name)) %>%
+  select(-original_verbatim_name) %>%
+  unique() %>%
+  mutate(
+    datasetID = datasetID,
+    licenseID = licenseID,
+    verbatimIdentificationID = dense_rank(verbatim_name),
+    samplingPeriod = dense_rank(start_year),
+    effort = ifelse(effort == 0, NA, effort),
+    samp_effort_type = ifelse(is.na(samp_effort_type), NA, 4)
+  ) %>%
+  unique()
+
+gc()
+
+
+data_table <- data.table(
+  datasetID = datasetID,
+  datasetName = "New York State Breeding Bird Atlas",
+  datasetPublisher = "New York State Department of Environmental Conservation, New York Natural Heritage Program",
+  datasetPublisherContact = "nybbba3@gmail.com | julie.hart@dec.ny.gov",
+  licenseID = licenseID,
+  rightsHolder = "New York State Department of Environmental Conservation",
+  bibliographicCitation = "BBA1 data: New York State Breeding Bird Atlas [Internet]. 1980 - 1985. Release 1.0. Albany (New York): New York State Department of Environmental Conservation. updated 2007 Jun 6; cited 2024 Apr 09. Available from: https://www.dec.ny.gov/animals/7312.html. | BBA2 data: New York State Breeding Bird Atlas 2000 [Internet]. 2000 - 2005. Release 1.0. Albany (New York): New York State Department of Environmental Conservation. updated 2007 Jun 11; cited 2024 Apr 09. Available from: https://www.dec.ny.gov/animals/7312.html.",
+  citationIdentifier = "",
+  provider = "New York State Department of Environmental Conservation",
+  shareable = "NO",
+  coauthorshipRequired = "NO",
+  coauthors = "",
+  coauthorshipSuggested = "Carmen Soria - carmendianasoria@gmail.com | Kateřina Tschernosterová - tschernosterova@fzp.czu.cz | Friederike Wölke - friederike.woelke@gmail.com | Gabriel Ortega - g.ortega.solis@gmail.com",
+  isSamplingEffortReported = "YES",
+  isOccurrenceProbabilityAvailable = "NO"
+)
+
+
+data_table <- data.table(
+  siteID = full_data$cell_label,
+  scalingID = full_data$cell_grouping,
+  datasetID = full_data$datasetID,
+  area = full_data$area,
+  croppedArea = full_data$area_cropped,
+  areaUnit = "km2",
+  maxLength = NA,
+  northSouthLength = NA,
+  eastWestLength = NA,
+  lengthUnit = "km",
+  centroidDecimalLongitude = full_data$cell_long,
+  centroidDecimalLatitude = full_data$cell_lat,
+  samplingRepetitions = full_data$repeated
+) %>% unique()
+
+
+data_table <- grid %>%
+  dplyr::bind_rows() %>%
+  ungroup() %>%
+  rename(
+    siteID = cell_label,
+    scalingID = cell_grouping,
+    geometry = geom
+  ) %>%
+  mutate(
+    siteID = as.integer(siteID),
+    scalingID = as.integer(scalingID),
+    datasetID = as.integer(datasetID),
+    footprintSRS = "epsg:4326",
+    verbatimFootprintSRS = verbatimFootprintSRS
+  ) %>%
+  select(
+    ., siteID, scalingID, datasetID,
+    footprintSRS, verbatimFootprintSRS, geometry
+  )
+
+data_table$geometry <- st_cast(data_table$geometry, "MULTIPOLYGON")
+
+
+data_table <- filter(full_data, cell_grouping == 1) %>%
+  mutate(
+    verbatimIdentificationID = verbatimIdentificationID,
+    verbatimSiteID = cellID,
+    datasetID = datasetID,
+    samplingPeriodID = samplingPeriod,
+    recordFilter = NA
+  ) %>%
+  select(
+    verbatimIdentificationID,
+    verbatimSiteID,
+    datasetID,
+    samplingPeriodID,
+    recordFilter
+  ) %>%
+  unique()
+```
+
+## Getting started
+
+```{r}
+#| label: libraries
+suppressPackageStartupMessages({
+library(dplyr)
+library(sf)
+library(here)
+#install.packages("skimr", repos = "https://cloud.r-project.org/")
+library(skimr)
+})
+```
+
+```{r}
+#| label: data-import
+dta <- 
+  readRDS(here::here("Data/input/data.rds")) %>% 
+  filter(datasetID == 6)
+grids <- 
+  readRDS(here::here("Data/input/grid.rds")) %>% 
+  filter(datasetID == 6)
+data_sf <- 
+  readRDS(here::here("Data/input/data_sf.rds")) %>% 
+  filter(datasetID == 6)
+
+
+if (!dir.exists(here::here("Demo_NewYork/Data/input"))) {
+  dir.create(here::here("Demo_NewYork/Data/input"))
+  }
+
+write.csv2(dta, here::here("Demo_NewYork/Data/input/raw_data_ny.csv"))
+saveRDS(grids, here::here("Demo_NewYork/Data/input/grid_ny.rds"))
+saveRDS(data_sf, here::here("Demo_NewYork/Data/input/sf_data_ny.rds"))
+```
+
+## Data filtering
+
+```{r}
+#| label: cells-sampled-twice
+# 1. cells sampled twice
+cells <-
+  data_sf %>%
+  st_drop_geometry() %>%
+  group_by(datasetID, scalingID, siteID, samplingPeriodID) %>%
+  mutate(cell_sampled = if_else(is.na(verbatimIdentification), 0, 1)) %>%
+  ungroup() %>%
+  distinct(datasetID, scalingID, siteID, samplingPeriodID, cell_sampled, croppedArea, time_span) %>%
+  group_by(datasetID, scalingID, siteID, croppedArea) %>%
+  dplyr::summarise(
+    cell_sampling_repeats = n_distinct(samplingPeriodID, na.rm = TRUE),
+    .groups = "keep") %>%
+  mutate(cells_keep =
+           case_when(
+             cell_sampling_repeats == 2 & !is.na(croppedArea) ~ 1,
+             cell_sampling_repeats %in% c(0,1) | is.na(croppedArea) ~ 0,
+            .default = NA)) %>%
+  unique()
+
+
+# Checks:
+colSums(is.na(cells)) # no NAs
+glimpse(cells) 
+```
+
+```{r}
+#| label: reduce-to-species-data
+species_df <-
+  data_sf %>%
+  st_drop_geometry() %>%
+  filter(scalingID == 1) %>%
+  distinct(datasetID, verbatimIdentification, scientificName, samplingPeriodID, time_span) %>%
+  filter(!is.na(verbatimIdentification)) # NAs from cells that were not sampled twice (here: only site 5316)
+
+glimpse(species_df)
+```
+
+### Introduced species
+
+This part requires access to the BirdLife International range maps
+available here:
+<https://datazone.birdlife.org/contact-us/request-our-data>
+
+Due to licensing restrictions we cannot share this part, but instead we
+share a list of species that are introduced in New York.
+
+```{r}
+#| label: introduced-species
+
+# temp <-  
+#   readRDS(here::here("Data", "output", "1_data_sf.rds")) %>% 
+#   st_drop_geometry() %>%
+#   filter(datasetID == 6)
+# 
+# # write to file
+# temp %>% 
+#   distinct(verbatimIdentification, introduced) %>% 
+#   write.csv2(here::here("Demo_NewYork/Data/input/introduced_species_ny.csv"))
+
+
+# read back in
+introduced <- 
+  read.csv2(here::here("Demo_NewYork/Data/input/introduced_species_ny.csv"))
+
+# cheks: 7 introduced species
+table(introduced$introduced)
+
+# here is the list of species removed:
+introduced %>% 
+  filter(introduced == 1) %>% 
+  pull(verbatimIdentification)
+
+species_df2 <- 
+  species_df %>% 
+  left_join(introduced[2:3])
+
+glimpse(species_df2)
+
+```
+
+### Species lost or gained completely
+
+```{r}
+#| label: sp-lost-or-gained
+common_sp <- 
+  data_sf %>%
+  st_drop_geometry() %>%
+  filter(scalingID == 1) %>%
+  left_join(species_df2) %>%
+  left_join(cells %>% filter(scalingID == 1)) %>%
+  na.omit() %>%
+  filter(cells_keep == 1 & introduced == 0) %>%
+  group_by(verbatimIdentification) %>%
+  dplyr::summarise(sp_sampling_repeats = n_distinct(samplingPeriodID),
+                   .groups = "drop")
+
+
+# checks: removes 16 species that were only sampled once
+table(common_sp$sp_sampling_repeats)
+
+# here is the list of species removed:
+common_sp %>%
+  filter(sp_sampling_repeats == 1) %>% 
+  pull(verbatimIdentification)
+```
+
+### Decide which species to keep
+
+```{r}
+#| label: species-keep
+species_df3 <- 
+  species_df2 %>%
+  left_join(common_sp) %>%
+    mutate(
+    species_keep =
+      case_when(
+        sp_sampling_repeats == 2 & introduced == 0 ~ 1,
+        TRUE ~ 0))
+
+# checks: we remove 29 species and keep 466 total in both sampling periods.
+table(species_df3$species_keep)
+```
+
+### Apply data filters
+
+```{r}
+#| label: apply-filters
+data_sf2 <-
+  data_sf %>%
+  left_join(cells) %>%
+  left_join(species_df3)
+
+# keep only species and cells sampled twice
+data_filt <-
+  data_sf2 %>%
+  st_drop_geometry() %>%
+  filter(!is.na(verbatimIdentification) & species_keep == 1 & cells_keep == 1)
+
+# Checks:
+data_filt %>%
+  group_by(samplingPeriodID) %>%
+  skimr::skim()
+
+
+data_filt_reduced <- 
+  data_filt %>% 
+  select(scalingID, siteID, samplingPeriodID, 
+         verbatimIdentification, scientificName, 
+         verbatimFootprintSRS, footprintSRS, croppedArea, areaUnit, 
+         centroidDecimalLongitude, centroidDecimalLatitude, 
+         startYear, endYear)
+
+# checks: looks good.
+glimpse(data_filt_reduced)
+
+```
+
+### Taxon matching
+
+```{r}
+#| eval: false
+#| include: true
+#| label: taxon-lookup
+
+tax_lookup <-
+  read.csv(here::here("Data/input/Tax_lookup.csv"))[2:7] %>%
+  filter(verbatimIdentification %in% data_filt_reduced$verbatimIdentification)
+
+write.csv2(tax_lookup, 
+           here::here("Demo_NewYork/Data/input/Tax_lookup_ny.csv"))
+```
+
+### Write to file
+
+```{r}
+#| label: write-to-file
+
+if (!dir.exists(here::here("Demo_NewYork/Data/output"))) {
+  dir.create(here::here("Demo_NewYork/Data/output"))
+}
+
+saveRDS(data_sf2, 
+        here::here("Demo_NewYork/Data/output/1_data_sf_ny.rds"))
+saveRDS(data_filt_reduced, 
+        here::here("Demo_NewYork/Data/output/1_data_filtered_ny.rds"))
+
+```

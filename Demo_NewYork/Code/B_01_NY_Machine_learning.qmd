@@ -1,0 +1,815 @@
+---
+title: "B_01_NY_MachineLearning"
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    toc: true          # optional: adds a table of contents
+    theme: cosmo       # optional: Bootstrap theme
+    code-fold: show    # optional: collapsible code blocks
+    code-tools: true   # optional: adds copy/paste buttons
+    toc-depth: 4  
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+In the following, we will fit random forest models to the first New York data set, using the `tidymodels` framework. The goal is to predict the temporal change to the second atlas replication using Jaccard dissimilarity and log ratio AOO values of the species distribution for each species in the dataset. We use ranger random forest models with Bayesian hyperparameter tuning. The model is evaluated using 10-fold cross-validation repeated three times. We will also explore variable importance and partial dependencies, as well as interactions between predictors.
+
+```{r}
+#| warning: false
+#| message: false
+#| error: false
+
+rm(list=ls())
+gc()
+install.packages("tidymodels", repos = "https://cloud.r-project.org/") # install here package if not already installed
+suppressPackageStartupMessages({
+library(here)
+library(dplyr)
+library(ranger)
+library(tidymodels)
+library(caret)
+library(skimr)
+library(DALEXtra)
+library(hstats)
+library(rsample)
+library(tune)
+library(parsnip)
+library(recipes)
+library(workflows)
+library(yardstick)
+library(dials)
+library(forcats)
+})
+
+tidymodels_prefer() # solve conflicted functions in favor of tidymodels
+
+set.seed(123)
+
+```
+## Model fitting 
+### Get Data
+
+```{r}
+dta <- 
+  read.csv(here::here("Demo_NewYork/Data/output/data_final_ny.csv"))[2:19] %>%
+  mutate(
+    Migration = factor(as.character(Migration), levels = c(1,2,3)),
+    Habitat_5 = factor(as.character(Habitat_5), levels = c(
+      "closed", "freshwater", "open", "human", "marine"
+      )),
+    Threatened = factor(as.character(Threatened), levels = c(0,1)),
+    Generalism = factor(as.character(Generalism), levels = c(0,1))
+  ) 
+
+
+# Set variables for model
+sp_id <- 
+  c("verbatimIdentification", "scientificName")
+
+H1 <- 
+  c("Mass", "GlobRangeSize_km2", 
+    "Migration", "Habitat_5", 
+    "Generalism", "Threatened", "pd")
+
+H2 <- 
+  c("D_AOO_a", "mean_lnLac", 
+    "AOO", "joincount_delta", 
+    "circNorm", "minDist_toBorder_centr")
+
+predictors <- 
+  c(H1, H2)
+
+responses <- 
+  c("Jaccard_dissim", 
+    "log_R2_1", 
+    "log_R2_1_per_year")
+
+
+```
+
+### Model workflow
+
+```{r}
+#| eval: false
+#| include: true
+
+# create empty lists to store results
+tuned_res <- list()
+predictions <- list()
+res <- list()
+list_split_data <- list()
+results_response <- replicate(3, list())
+```
+
+```{r}
+# Create data split (80/20)
+set.seed(123)
+split_info <- initial_split(dta, prop = 0.8)
+train <- training(split_info) # 186 sp
+test <- testing(split_info) # 47 sp
+
+```
+
+
+```{r}
+#| eval: false
+#| include: true
+
+tictoc::tic()
+set.seed(123)
+
+# model specifics
+mod_spec <- 
+  rand_forest(mtry = tune(),
+              trees = tune(),
+              min_n = tune()) %>%
+  set_engine("ranger",
+             importance = "permutation",
+             respect.unordered.factors = TRUE) %>%
+  set_mode("regression")
+
+# tuning parameter
+rf_params <- 
+  parameters(
+    mtry(range = c(2L, 10L)),
+    min_n(range = c(5L, 15L)),
+    trees(range = c(1000L, 5000L))
+    )
+
+# Set up cross-validation
+set.seed(123)
+folds <- 
+  vfold_cv(train, v = 10, repeats = 3)
+
+# save data splits for later use in predictions
+list_split_data <- 
+  list(
+    split_info = split_info,
+    train = train,
+    test = test,
+    folds = folds
+    )
+
+
+```
+
+
+```{r}
+#| eval: false
+#| include: true
+
+# Loop through response variables:
+
+for (resp_i in seq_along(responses)){
+  
+  
+  # Create model recipe:
+  if (responses[resp_i] == "Jaccard_dissim") {
+      mod_rec <-
+        recipe(Jaccard_dissim ~ ., data = train) %>%
+        update_role(all_of(sp_id),
+          new_role = "speciesID",
+          old_role = "predictor"
+        ) %>%
+        update_role(all_of(responses[-resp_i]),
+          old_role = "predictor",
+          new_role = "alt_resp"
+        )
+    } else if (responses[resp_i] == "log_R2_1") {
+      mod_rec <-
+        recipe(log_R2_1 ~ ., data = train) %>%
+        update_role(all_of(sp_id),
+          new_role = "speciesID",
+          old_role = "predictor"
+        ) %>%
+        update_role(all_of(responses[-resp_i]),
+          old_role = "predictor",
+          new_role = "alt_resp"
+        )
+    } else if (responses[resp_i] == "log_R2_1_per_year") {
+      mod_rec <-
+        recipe(log_R2_1_per_year ~ ., data = train) %>%
+        update_role(all_of(sp_id),
+          new_role = "speciesID",
+          old_role = "predictor"
+        ) %>%
+        update_role(all_of(responses[-resp_i]),
+          old_role = "predictor",
+          new_role = "alt_resp"
+        )
+    }
+
+  
+  # Create workflow with recipe
+  set.seed(123)
+  mod_wf <- 
+    workflow() %>%
+    add_recipe(mod_rec) %>%
+    add_model(mod_spec)
+  
+  #----------------------------------------------------------#
+  # Bayesian hyperparameter tuning -----
+  #----------------------------------------------------------#
+
+  tictoc::tic()
+  set.seed(123)
+  tuned_bayes <-
+    tune_bayes(
+      mod_wf,
+      resamples = folds,
+      param_info = rf_params, 
+      initial = 5,
+      iter = 50,
+      control = 
+        control_bayes(
+          verbose = T,
+          no_improve = 10, 
+          seed = 123)
+      )
+  tictoc::toc() # 1233.37 sec elapsed
+
+  best <-
+    tuned_bayes %>%
+    select_best(metric = "rmse")
+
+  #----------------------------------------------------------#
+  # Final model fit -----
+  #----------------------------------------------------------#
+
+  final_wf <- 
+    mod_wf %>%
+    finalize_workflow(best)
+
+  # perform the model evaluation on the testing data directly
+  final_fit <- 
+    final_wf %>%
+    last_fit(split_info) 
+
+  #----------------------------------------------------------#
+  # Predictions on test data -----
+  #----------------------------------------------------------#
+
+  p <-
+    predict(
+      final_fit %>% tune::extract_workflow(), 
+      new_data = test
+      ) %>%
+    bind_cols(
+      test %>% 
+        select(responses[resp_i], verbatimIdentification, scientificName)
+      ) %>% # change y with response var
+    setNames(
+      c(".pred", 
+        responses[resp_i],  
+        "verbatimIdentification", 
+        "scientificName")
+      ) %>%
+    mutate(
+      resid = .[[responses[resp_i]]] - .pred)
+
+
+  #----------------------------------------------------------#
+  # explainable AI (xAI) -----
+  #----------------------------------------------------------#
+
+
+  fit <- 
+    final_fit %>%
+    extract_fit_parsnip()
+
+  explainer <- 
+    DALEXtra::explain_tidymodels(
+      label = paste0(responses[resp_i]),
+      fit,
+      data = train %>%
+        select(
+          !any_of(c(responses, "verbatimIdentification", "scientificName"))
+          ),
+      y = train %>% 
+        pull(responses[resp_i])
+      )
+
+  # save results to list
+  results_response[[resp_i]] <-
+    list(
+      tuned_bayes = tuned_bayes,
+      best = best,
+      final_fit = final_fit,
+      predictions = p,
+      explainer = explainer,
+      pd = 
+        model_profile(
+          explainer,
+          type = "partial",
+          N = NULL,
+          variables = explainer$data %>% names()
+      ),
+      md = model_diagnostics(explainer),
+      mp = model_performance(explainer),
+      vi = model_parts(explainer)
+    )    
+  }
+
+tictoc::toc()
+
+
+saveRDS(results_response, 
+        here::here("Demo_NewYork/Data/output/B_01_NY_model_results.rds"))
+
+```
+
+### Interactions (h\^2)
+
+```{r}
+#| eval: false
+#| include: true
+
+library(hstats)
+
+interaction_res <- list()
+
+for (resp_i in seq_along(results_response)){
+  
+  dd <- 
+    results_response[[resp_i]]
+  
+  fit <- 
+    dd$final_fit %>% 
+    extract_fit_parsnip()
+  
+  preds <- 
+    dd$explainer$data
+  
+  interaction_res[[resp_i]] <- 
+    hstats(fit,
+           X = preds,
+           threeway_m = 13)
+  
+}
+
+saveRDS(interaction_res, 
+        here::here("Demo_NewYork/Data/output/B_01_NY_interactions.rds"))
+```
+
+### Variable importances
+
+```{r}
+#| eval: false
+#| include: true
+
+vimp_list <- list()
+for(i in seq_along(results_response)){
+
+  if(i == 1) this_response <- "Jaccard_dissim" else
+    if(i == 2) this_response <- "log_R2_1" else
+      if(i == 3) this_response <- "log_R2_1_per_year"
+
+      fit <- 
+        results_response[[i]]$final_fit %>% 
+        extract_fit_engine()
+      
+      vimp <- 
+        fit$variable.importance
+
+      vimp_list[[i]] <- 
+        data.frame(
+          variable = names(vimp),
+          importance = vimp,
+          row.names = NULL,
+          response = this_response,
+          importance_mode = fit$importance.mode
+          )
+      }
+
+# bind together
+imp_df <-
+  vimp_list %>%
+  bind_rows()
+
+saveRDS(imp_df,
+        here::here("Demo_NewYork/Data/output/B_01_NY_variable_importance.rds"))
+```
+
+## Evaluate model performance
+
+```{r}
+
+# read results back in 
+model_results <- 
+  readRDS(here::here("Demo_NewYork/Data/output/B_01_NY_model_results.rds"))
+importances <- 
+  readRDS(here::here("Demo_NewYork/Data/output/B_01_NY_variable_importance.rds"))
+interactions <- 
+  readRDS(here::here("Demo_NewYork/Data/output/B_01_NY_interactions.rds"))
+
+
+```
+
+```{r}
+# Jaccard
+model_results[[1]]$final_fit %>% 
+    extract_fit_parsnip()
+
+# Log ratio
+model_results[[2]]$final_fit %>% 
+    extract_fit_parsnip()
+
+# Log ratio per year
+model_results[[3]]$final_fit %>% 
+    extract_fit_parsnip()
+```
+
+
+### Reshape model results for plotting
+
+```{r}
+
+model_hyperparam <- 
+  list(model_results[[1]]$best,
+       model_results[[2]]$best,
+       model_results[[3]]$best) %>%
+  bind_rows() %>%
+  select(-.config) %>%
+  mutate(
+    response = c("Jaccard_dissim", "log_R2_1", "log_R2_1_per_year")
+  )
+
+
+model_perf <-
+  list(model_results[[1]]$final_fit$.metrics,
+       model_results[[2]]$final_fit$.metrics,
+       model_results[[3]]$final_fit$.metrics) %>%
+  bind_rows() %>%
+  mutate(
+    response = c(rep("Jaccard_dissim",2), 
+                 rep("log_R2_1",2), 
+                 rep("log_R2_1_per_year",2))
+    ) %>%
+  pivot_wider(id_cols = c(response),
+              names_from = c(".metric"),
+              values_from = c(".estimate")) %>%
+  full_join(model_hyperparam) %>%
+  mutate(
+    cv = "3x10folds",
+    tuning_method = "bayesian",
+    model_type = "ranger")
+
+kableExtra::kable(model_perf)
+```
+
+```{r}
+interactions[[1]] %>% plot() + ggthemes::theme_few() 
+
+interactions_res <- list()
+for (resp_i in seq_along(interactions)){
+
+    if(resp_i == 1) this_response <- "Jaccard_dissim" else
+      if(resp_i == 2) this_response <- "log_R2_1" else
+        if(resp_i == 3) this_response <- "log_R2_1_per_year"
+
+        print(this_response)
+
+        response_res <- interactions[[resp_i]]
+
+        H2_all_df <-
+          data.frame(
+            row.names = NULL,
+            response = this_response,
+            variable = "all",
+            test = "total_interaction_strength",
+            H2 = summary(response_res)$h2[[1]])
+
+        H2_overall_df <-
+          data.frame(
+            row.names = NULL,
+            response = this_response,
+            variable = row.names(summary(response_res)$h2_overall[[1]]),
+            test = "overall",
+            H2 = summary(response_res)$h2_overall[[1]])
+
+        H2_pairwise_df <-
+          data.frame(
+            row.names = NULL,
+            response = this_response,
+            variable = row.names(summary(response_res)$h2_pairwise[[1]]),
+            test = "pairwise",
+            H2 = summary(response_res)$h2_pairwise[[1]]
+          )
+
+        H2_threeway_df <-
+          data.frame(
+            row.names = NULL,
+            response = this_response,
+            variable = row.names(summary(response_res)$h2_threeway[[1]]),
+            test = "threeway",
+            H2 = summary(response_res)$h2_threeway[[1]]
+          )
+
+
+        temp <-
+          full_join(H2_all_df, H2_overall_df) %>%
+          full_join(H2_pairwise_df) %>%
+          full_join(H2_threeway_df)
+
+        interactions_res[[resp_i]] <- temp
+
+
+  } 
+
+interactions_res <- 
+  interactions_res %>%
+  bind_rows()
+```
+
+## Plots:
+
+#### Model performance
+
+```{r}
+
+p_1 <-
+  model_perf %>%
+  pivot_longer(cols = c(rmse, rsq)) %>%
+  ggplot() +
+  geom_point(aes(x = response, y = value, shape = name), cex = 2, col = "black", bg = "black")+
+  ggthemes::theme_few()+
+  scale_shape_manual(values = c(rmse = 21, rsq = 1))
+
+p_1
+
+
+```
+
+#### Variable Importance
+
+```{r}
+
+library(tidytext)
+
+vip_full <- importances %>%
+  group_by(variable) %>%
+  mutate(mean_importance_jaccard = mean(importance[response == "Jaccard_dissim"], na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(variable = forcats::fct_reorder(variable, mean_importance_jaccard)) %>%
+  mutate(hypo = case_when(variable %in% H1 ~ "H1",
+                          variable %in% H2 ~ "H2"))
+
+p_3 <-
+  vip_full %>%
+  ggplot() +
+  geom_col(aes(x = importance, y = variable, fill = hypo)) +
+  facet_wrap(~response, scales = "free_x") +  # free_x so y-axis stays fixed
+  labs(y = "Variable", x = "Importance")+
+  ggthemes::theme_few()+
+  scale_fill_manual(values = c("#f1a340","#7fbf7b", "#998ec3"))
+
+
+p_3
+
+
+
+```
+
+#### Partial Plots
+
+```{r}
+#----------------------------------------------------------#
+# c) Partial dependencies:
+#----------------------------------------------------------#
+
+# Set variables:
+H1 <- 
+  c("Mass", "GlobRangeSize_km2", 
+    "Migration", "Habitat_5", 
+    "Generalism", "Threatened", "pd")
+H2 <- 
+  c("D_AOO_a", "mean_lnLac", 
+    "AOO", "joincount_delta", 
+    "circNorm", "minDist_toBorder_centr")
+
+predictors <- 
+  c(H1, H2)
+
+# Categorical variables:
+cat_vars <- c("Migration",
+              "Habitat_5",
+              "Generalism",
+              "Threatened",
+              "datasetID")
+
+
+pdp_list_num <- 
+  replicate(3, list)
+
+pdp_list_cat <- 
+  replicate(3, list)
+
+for (resp_i in seq_along(responses)){
+  this_model <- 
+    model_results[[resp_i]]$final_fit %>% 
+    extract_fit_parsnip()
+  
+  pdp_list_num[[resp_i]] <- 
+    list()
+  
+  pdp_list_cat[[resp_i]] <- 
+    list()
+  
+  for (var_i in seq_along(predictors)){
+    this_variable <- 
+      predictors[var_i]
+    
+      
+      pdp_df <- 
+      pdp::partial(
+        object = this_model,
+        train = train,
+        pred.var = this_variable,
+        plot = FALSE) %>%
+      pivot_longer(cols = c(this_variable), 
+                   names_to = "variable") %>%
+      mutate(response = responses[resp_i])
+      
+      if (this_variable %in% cat_vars) {
+        pdp_list_cat[[resp_i]][[this_variable]] <- pdp_df
+      } else {
+        pdp_list_num[[resp_i]][[this_variable]] <- pdp_df
+      }
+      
+  }
+  
+}
+
+
+num <- lapply(pdp_list_num,bind_rows)
+cat <- lapply(pdp_list_cat,bind_rows)
+
+
+
+
+```
+
+```{r}
+#| fig-width: 13
+#| fig-height: 13
+lookup <- 
+  c("Mass" = "Body mass",
+    "GlobRangeSize_km2" = "Global range size",
+    "Migration" = "Migration",
+    "Habitat_5" = "Habitat type",
+    "Generalism" = "Generalism",
+    "Threatened" = "Threatened",
+    "pd" = "Phylogenetic distinctiveness",
+    "D_AOO_a" = "Fractal dimension",
+    "mean_lnLac" = "Mean log lacunarity",
+    "AOO" = "Area of occupancy",
+    "joincount_delta" = "Spatial autocorrelation",
+    "circNorm" = "Normalized circularity",
+    "minDist_toBorder_centr" = "Smallest distance centroid-border") 
+
+
+ for (resp_i in seq_along(num)){
+        
+        this_resp <- responses[resp_i]
+
+        response_dd <- num[[resp_i]] %>% 
+          filter(response == this_resp)
+        
+        p0 <- response_dd %>%
+          ggplot()+
+          geom_line(
+            aes(
+            y = yhat,
+            x = value,
+            group = variable),
+            linewidth = 0.8, 
+            alpha = 0.8)+
+          labs(x = NULL,
+               y = paste0(this_resp, " (Partial)"))+
+          facet_wrap(~ variable , 
+                     scales = "free_x", 
+                     labeller = labeller(variable = lookup))+
+          ggthemes::theme_par()+
+          ggtitle(paste(this_resp))+
+          scale_color_brewer(palette = "PuOr")
+        
+        
+        # adjust axes and plot hline
+        
+        if (this_resp == "Jaccard_dissim") {
+          p1 <-
+            p0 +
+            ylim(0, 1) +
+            geom_hline(
+              yintercept = 0.5,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+        } else if (this_resp == "log_R2_1") {
+          p1 <-
+            p0 +
+            geom_hline(
+              yintercept = 0,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+          
+        } else if (this_resp == "log_R2_1_per_year") {
+          p1 <-
+            p0 +
+            geom_hline(
+              yintercept = 0,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+        }
+        
+        print(p1)
+        
+      } # responses loop closing
+
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+
+ for (resp_i in seq_along(cat)){
+        
+        this_resp <- responses[resp_i]
+
+        response_dd <- cat[[resp_i]] %>% 
+          filter(response == this_resp)
+        
+        p0_2 <- response_dd %>%
+          ggplot()+
+         geom_point(
+            aes(y = yhat,
+                x = value),
+            alpha = 0.8,
+            size = 3)+
+          labs(x = NULL,
+               y = paste0(this_resp, " (Partial)"))+
+          facet_wrap(~ variable , 
+                     scales = "free_x", 
+                     labeller = labeller(variable = lookup))+
+          ggthemes::theme_par()+
+          ggtitle(paste(this_resp))+
+          scale_color_brewer(palette = "PuOr")
+        
+        
+        # adjust axes and plot hline
+        
+        if (this_resp == "Jaccard_dissim") {
+          p2 <-
+            p0_2 +
+            ylim(0, 1) +
+            geom_hline(
+              yintercept = 0.5,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+        } else if (this_resp == "log_R2_1") {
+          p2 <-
+            p0_2 +
+            geom_hline(
+              yintercept = 0,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+          
+        } else if (this_resp == "log_R2_1_per_year") {
+          p2 <-
+            p0_2 +
+            geom_hline(
+              yintercept = 0,
+              linewidth = 0.3,
+              col = "darkgrey"
+            )
+        }
+        
+        print(p2)
+        
+      } # responses loop closing
+```
+
+#### Interactions
+
+```{r}
+#| fig-width: 20
+#| fig-height: 18
+
+p_5 <- 
+  interactions_res %>%
+  filter(!c(test == "total_interaction_strength")) %>%
+  ggplot()+
+  geom_col(aes(x = H2, y = reorder_within(variable, H2, response)))+
+  facet_wrap(~test+response,scales = "free")+
+  scale_y_reordered()+
+  ggthemes::theme_few()+
+  theme(axis.text.y = element_text(size = 15))
+
+p_5
+```
