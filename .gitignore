@@ -1,14 +1,13 @@
+# Rproj things
 /.Rproj.user/
-.tif
-.rds
 /Git/.Rproj.user/*
-*.json
 /Git/.Rproj.user
 /Git/.Rproj.user/shared/notebooks
+
+# File types:
+*.json
 *.rds
 *.csv
-/Git/Data/input/shp_global
-/Git/Data/input/shp_introduced
 *.tif
 *.pptx
 *.bmp
@@ -16,12 +15,23 @@
 *.pdf
 *.xlsx
 *.png
-*.csv
+*.rmarkdown
+*.Rproj
+
+
+# Exceptions: (include these!)
+!Demo_NewYork/Data/input/**
+
+# Specific files:
+Demo_NewYork/Data/input/MRC_consensus_BirdTree.tre
+Data/input/MRC_consensus_BirdTree.tre
+Demo_NewYork/Data/input/AVONET Supplementary dataset 1.xlsx
+
+
+# Folders
+/Git/Data/input/shp_global
+/Git/Data/input/shp_introduced
 /Manuscript
 /Git/Data/input/species_ranges_tiff
 /Data/input/shp_global
 /Data/input/shp_introduced
-Demo_NewYork/Data/input/MRC_consensus_BirdTree.tre
-Data/input/MRC_consensus_BirdTree.tre
-*.rmarkdown
-*.Rproj
