@@ -51,18 +51,36 @@ dta_new <- dta %>%
   select(all_of(c(sp_id, responses, H3, H1, H2))) %>%
   ungroup()
 
+
+# Dummy-code all factors (or selected ones)
+dta_dummies <- fastDummies::dummy_cols(dta_new %>% select(-verbatimIdentification, -scientificName, -Jaccard_dissim, -log_R2_1, -log_R2_1_per_year) %>% na.omit() %>% filter(Migration != "NA"), 
+                          remove_first_dummy = TRUE, # avoids multicollinearity
+                          remove_selected_columns = TRUE)
+
+cor_matrix <- corrr::correlate(dta_dummies, 
+                               use = "pairwise.complete.obs", 
+                               quiet = TRUE, 
+                               method = "spearman") %>%
+  rearrange()
+
+rplot(cor_matrix)
+
+cor_matrix %>%
+  mutate(across(-term, ~ ifelse(is.na(.x), 1, .x))) %>%
+  network_plot(, min_cor = 0.8)
 #----------------------------------------------------------#
 # Plots ----
 #----------------------------------------------------------#
-
+library(fastDummies)
 library(inspectdf)
 library(summarytools)
 library(caret)
 library(ggplot2)
 library(DataExplorer)
 library(explore)
+library(corrr)
 
-create_report(dta_new, output_dir =here::here("Figures/A_data/"), output_file = "A_13_report.html")
+#create_report(dta_new, output_dir =here::here("Figures/A_data/"), output_file = "A_13_report.html")
 #explore(dta_new)
 GGally::ggpairs(ggplot2::aes(colour = datasetID), data= dta_new %>% select(-verbatimIdentification, -scientificName)%>% as.data.frame())
 inspect_types(dta_new) %>% show_plot()
@@ -262,4 +280,7 @@ ggplot(dta_new, aes(x = Threatened, fill = datasetID))+
 
 ggplot(dta_new, aes(x = Habitat_5, fill = datasetID))+
   geom_bar(posititon = "identity")
+
+
+
 

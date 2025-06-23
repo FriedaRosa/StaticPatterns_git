@@ -48,12 +48,15 @@ data_sf <-
 all_cells <-
   data_sf %>%
   st_drop_geometry() %>%
-  distinct(datasetID,
-           siteID,
-           cell_sampling_repeats) %>%
+  distinct(
+    datasetID,
+    siteID,
+    cell_sampling_repeats
+  ) %>%
   mutate(cell_sampling_repeats = as.factor(case_when(
     is.na(cell_sampling_repeats) ~ 0,
-    .default = cell_sampling_repeats)))
+    .default = cell_sampling_repeats
+  )))
 
 #----------------------------------------------------#
 # Split data by groups into a list
@@ -69,7 +72,6 @@ list_dat <-
 #----------------------------------------------------#
 
 get_occupancy_change <- function(data_i, all_cells) {
-
   # dataset identificator
   atlas_id <- unique(data_i$datasetID)
 
@@ -122,7 +124,7 @@ get_occupancy_change <- function(data_i, all_cells) {
 # Apply function to each dataset
 #----------------------------------------------------#
 list_change_species <-
-  map(list_dat, ~get_occupancy_change(.x, all_cells))
+  map(list_dat, ~ get_occupancy_change(.x, all_cells))
 
 #----------------------------------------------------#
 # make sf data with change info
@@ -172,11 +174,14 @@ buffered_bbox <-
       st_transform(crs = my_crs_eu) %>%
       select(siteID) %>%
       unique(),
-    dist = 15)
+    dist = 15
+  )
 
 europe <-
-  ne_countries(continent = "europe",
-               scale = 10) %>%
+  ne_countries(
+    continent = "europe",
+    scale = 10
+  ) %>%
   st_transform(crs = my_crs_eu) %>%
   st_crop(buffered_bbox) %>%
   select(name)
@@ -208,7 +213,7 @@ my_crs_jp <-
 
 japan <-
   ne_countries(country = "japan", scale = 10) %>%
-  st_transform(crs = my_crs_jp ) %>%
+  st_transform(crs = my_crs_jp) %>%
   select(name)
 
 #----------------------------------------------------#
@@ -241,13 +246,15 @@ list_country_borders <-
   list(czechia, new_york, japan, europe)
 
 list_crs <-
-  list(my_crs_cz,
-       my_crs_ny,
-       my_crs_jp,
-       my_crs_eu)
+  list(
+    my_crs_cz,
+    my_crs_ny,
+    my_crs_jp,
+    my_crs_eu
+  )
 
 list_change_sf_transformed <-
-  map2(list_change_sf, list_crs, ~st_transform(.x, .y))
+  map2(list_change_sf, list_crs, ~ st_transform(.x, .y))
 
 #----------------------------------------------------#
 # Colors:
@@ -255,39 +262,46 @@ list_change_sf_transformed <-
 
 colors <-
   setNames(
-    c("#574f7d", "#998ec3", "#f1a340",
-      "#F7F7F7","lightgrey"),
-    c("stable occupancy", "newly colonized", "newly extirpated",
-      "not occupied", "not sampled"))
+    c(
+      "#574f7d", "#998ec3", "#f1a340",
+      "#F7F7F7", "lightgrey"
+    ),
+    c(
+      "stable occupancy", "newly colonized", "newly extirpated",
+      "not occupied", "not sampled"
+    )
+  )
 
 #----------------------------------------------------#
 # Theme:
 #----------------------------------------------------#
 
 my_theme <-
-  ggthemes::theme_map() +  # Use theme_map() as a base
+  ggthemes::theme_map() + # Use theme_map() as a base
   theme(
-    legend.position = "right",   # Move legend outside
-    legend.box = "vertical",     # Arrange legend items vertically
-    legend.margin = margin(10, 10, 10, 10),  # Add space around legend
-    plot.margin = margin(10, 50, 10, 10)  # Expand right margin to fit legend
+    legend.position = "right", # Move legend outside
+    legend.box = "vertical", # Arrange legend items vertically
+    legend.margin = margin(10, 10, 10, 10), # Add space around legend
+    plot.margin = margin(10, 50, 10, 10) # Expand right margin to fit legend
   )
 
 #----------------------------------------------------#
 # Map:
 #----------------------------------------------------#
 
-ggplot()+
+ggplot() +
   geom_sf(
-    data =list_change_sf[[1]] %>% st_transform(crs = list_crs[[1]]) %>%
+    data = list_change_sf[[1]] %>% st_transform(crs = list_crs[[1]]) %>%
       filter(verbatimIdentification == "Cinclus cinclus"),
-          aes(fill = change),
-          color = "lightgrey")+
+    aes(fill = change),
+    color = "lightgrey"
+  ) +
   geom_sf(
     data = list_country_borders[[1]],
-          fill = NA,
-          col = "black")+
-  scale_fill_manual(values = colors)+
+    fill = NA,
+    col = "black"
+  ) +
+  scale_fill_manual(values = colors) +
   my_theme
 
 
@@ -296,19 +310,20 @@ ggplot()+
 #----------------------------------------------------#
 # Map all species via loop
 #----------------------------------------------------#
-out_paths <- list(here("Figures/D_maps/czechia//"),
-                  here("Figures/D_maps/new_york//"),
-                  here("Figures/D_maps/japan//"),
-                  here("Figures/D_maps/europe//"))
+out_paths <- list(
+  here("Figures/D_maps/czechia//"),
+  here("Figures/D_maps/new_york//"),
+  here("Figures/D_maps/japan//"),
+  here("Figures/D_maps/europe//")
+)
 
-for(atlas_i in seq_along(list_change_sf)){
+for (atlas_i in seq_along(list_change_sf)) {
   this_atlas <- list_change_sf[[atlas_i]]
   atlas_id <- unique(this_atlas$datasetID)
   sp_list <- unique(this_atlas$verbatimIdentification)
   local_crs <- list_crs[[atlas_i]]
 
-  for(sp_i in seq_along(sp_list)){
-
+  for (sp_i in seq_along(sp_list)) {
     this_species <- sp_list[sp_i]
     data_species <- this_atlas %>%
       filter(verbatimIdentification == this_species)
@@ -319,37 +334,39 @@ for(atlas_i in seq_along(list_change_sf)){
 
 
     map <-
-      ggplot()+
-      my_theme+
-      geom_sf(data = data_species %>% st_transform(crs = local_crs),
-              aes(fill = change),
-              col = "lightgrey")+
-      geom_sf(data = list_country_borders[[atlas_i]]%>% st_transform(crs = local_crs),
-              fill = NA,
-              col = "black")+
+      ggplot() +
+      my_theme +
+      geom_sf(
+        data = data_species %>% st_transform(crs = local_crs),
+        aes(fill = change),
+        col = "lightgrey"
+      ) +
+      geom_sf(
+        data = list_country_borders[[atlas_i]] %>% st_transform(crs = local_crs),
+        fill = NA,
+        col = "black"
+      ) +
       scale_fill_manual(values = colors)
 
 
     # Export to powerpoint vector file
-output_file <- paste0(out_paths[[atlas_i]],
-                      gsub(" ", "_", this_species),
-                      "_change_map.pptx")
+    output_file <- paste0(
+      out_paths[[atlas_i]],
+      gsub(" ", "_", this_species),
+      "_change_map.pptx"
+    )
 
-if (!file.exists(output_file)) { # do not overwrite existing files #
-  export::graph2ppt(map,
-                    width = 9,
-                    height = 9,
-                    file = output_file)
-}
-
-
-
+    if (!file.exists(output_file)) { # do not overwrite existing files #
+      export::graph2ppt(map,
+        width = 9,
+        height = 9,
+        file = output_file
+      )
     }
-
   }
+}
 
 
 
 ggpubr::get_legend(map + theme(legend.position = "bottom")) %>% plot()
 ggsave(filename = "Change_map_legend.svg", path = here::here("Figures/A_data/"), width = 15)
-

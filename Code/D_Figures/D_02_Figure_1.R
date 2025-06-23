@@ -1,4 +1,3 @@
-
 #----------------------------------------------------#
 # Load libraries
 #----------------------------------------------------#
@@ -24,31 +23,36 @@ set.seed(123)
 # Plot settings
 #---------------------------------------------------#
 
-# Color vector for Log Ratio 
-my_cols_LR <- c("strong decrease [< log(0.5)]" = "#d7191c",
-                "weak decrease [log(0.5) - log (0.9)]" = "#fdae61",
-                "stable [log(0.9) - log(1.1)]" = "#e0e0e0",
-                "weak increase [log(1.1) - log(2)]" = "#a6d96a",
-                "strong increase [> log(2)]" = "#1a9641")
+# Color vector for Log Ratio
+my_cols_LR <- c(
+  "strong decrease [< log(0.5)]" = "#d7191c",
+  "weak decrease [log(0.5) - log (0.9)]" = "#fdae61",
+  "stable [log(0.9) - log(1.1)]" = "#e0e0e0",
+  "weak increase [log(1.1) - log(2)]" = "#a6d96a",
+  "strong increase [> log(2)]" = "#1a9641"
+)
 
-# Color vector for Jaccard 
-my_cols_J <- c("stable (< 0.1)" = "#B35806",
-               "weak turnover (0.1 - 0.25)" = "#F1A340",
-               "weak intermediate turnover (0.25 - 0.5)" = "#FEE0B6",
-               "strong intermediate turnover (0.5 - 0.75)" = "#D8DAEB",
-               "strong turnover (> 0.75)" = "#998EC3",
-               "complete turnover (> 0.9)" = "#542788")
+# Color vector for Jaccard
+my_cols_J <- c(
+  "stable (< 0.1)" = "#B35806",
+  "weak turnover (0.1 - 0.25)" = "#F1A340",
+  "weak intermediate turnover (0.25 - 0.5)" = "#FEE0B6",
+  "strong intermediate turnover (0.5 - 0.75)" = "#D8DAEB",
+  "strong turnover (> 0.75)" = "#998EC3",
+  "complete turnover (> 0.9)" = "#542788"
+)
 
-# Standard Theme 
-common_theme <-   theme_classic()+
+# Standard Theme
+common_theme <- theme_classic() +
   theme(
     axis.line = element_line(colour = "azure4", linetype = "solid"),
     axis.ticks = element_line(colour = "gray13"),
     axis.title = element_text(size = 20),
     axis.text = element_text(size = 16),
     axis.text.x = element_text(vjust = 0.9, hjust = 0.9),
-    #plot.title = element_text(size = 16, face = "bold", hjust = 0.5, vjust = 2),
-    legend.position = "none")
+    # plot.title = element_text(size = 16, face = "bold", hjust = 0.5, vjust = 2),
+    legend.position = "none"
+  )
 
 
 
@@ -68,7 +72,7 @@ predictors <- c(H1, H2, H3)
 responses <- c("Jaccard_dissim", "log_R2_1", "log_R2_1_per_year")
 
 # filter data to necessary columns
-dat <- 
+dat <-
   readRDS(here::here("Data/output/1_all_predictors_merged.rds")) %>%
   select(all_of(c(sp_id, responses, H3, H1, H2, "samplingPeriodID"))) %>%
   ungroup()
@@ -123,12 +127,15 @@ comp_df$LogRatio_y_pred <-
     predict(
       all_models$res[[3]] %>%
         tune::extract_workflow(),
-      new_data = comp_df),
+      new_data = comp_df
+    ),
     4
   )$.pred
 
 # checks:
-comp_df %>% select(verbatimIdentification, datasetID, Jacc_pred, LogRatio_y_pred, LogRatio_pred) %>% head()
+comp_df %>%
+  select(verbatimIdentification, datasetID, Jacc_pred, LogRatio_y_pred, LogRatio_pred) %>%
+  head()
 
 
 # Merge predictions to the data
@@ -136,14 +143,17 @@ dat_mod <- full_join(comp_df, dat) %>%
   mutate(
     Jaccard = case_when(
       samplingPeriodID == 2 ~ Jacc_pred,
-      .default = Jaccard_dissim),
+      .default = Jaccard_dissim
+    ),
     log_R2_1 = case_when(
       samplingPeriodID == 2 ~ LogRatio_pred,
-      .default = log_R2_1),
+      .default = log_R2_1
+    ),
     log_R2_1_y = case_when(
       samplingPeriodID == 2 ~ LogRatio_y_pred,
       .default = log_R2_1_per_year
-    )) %>%
+    )
+  ) %>%
   select(datasetID, samplingPeriodID, verbatimIdentification, log_R2_1, log_R2_1_y, Jaccard)
 
 # Checks:
@@ -160,21 +170,25 @@ dat_mod %>%
 # set factors and cutoff values for categories:
 
 # Define factor levels
-factor_levels_LR <- c("strong decrease [< log(0.5)]",
-                      "weak decrease [log(0.5) - log (0.9)]",
-                      "stable [log(0.9) - log(1.1)]",
-                      "weak increase [log(1.1) - log(2)]",
-                      "strong increase [> log(2)]")
+factor_levels_LR <- c(
+  "strong decrease [< log(0.5)]",
+  "weak decrease [log(0.5) - log (0.9)]",
+  "stable [log(0.9) - log(1.1)]",
+  "weak increase [log(1.1) - log(2)]",
+  "strong increase [> log(2)]"
+)
 # Define the cutoff points for the ranges in log scale
 cutoff_points_LR <- c(-Inf, log(0.5), log(0.9), log(1.1), log(2), Inf)
 
 # Define factor levels
-factor_levels_J <- c("stable (< 0.1)",
-                     "weak turnover (0.1 - 0.25)",
-                     "weak intermediate turnover (0.25 - 0.5)",
-                     "strong intermediate turnover (0.5 - 0.75)",
-                     "strong turnover (> 0.75)",
-                     "complete turnover (> 0.9)")
+factor_levels_J <- c(
+  "stable (< 0.1)",
+  "weak turnover (0.1 - 0.25)",
+  "weak intermediate turnover (0.25 - 0.5)",
+  "strong intermediate turnover (0.5 - 0.75)",
+  "strong turnover (> 0.75)",
+  "complete turnover (> 0.9)"
+)
 # Define the cutoff points for the ranges in log scale
 cutoff_points_J <- c(-Inf, 0.1, 0.25, 0.5, 0.75, 0.9, Inf)
 
@@ -188,13 +202,15 @@ dat_cat <- dat
 # Convert the log ratios and Jaccard to factor variables based on the ranges
 dat_cat$trend_LR <-
   cut(dat_cat$log_R2_1,
-      breaks = cutoff_points_LR,
-      labels = factor_levels_LR)
+    breaks = cutoff_points_LR,
+    labels = factor_levels_LR
+  )
 
 dat_cat$trend_J <-
   cut(dat_cat$Jaccard,
-      breaks = cutoff_points_J,
-      labels = factor_levels_J)
+    breaks = cutoff_points_J,
+    labels = factor_levels_J
+  )
 
 dat_cat <- dat_cat %>%
   rstatix::reorder_levels(trend_LR, factor_levels_LR) %>%
@@ -205,17 +221,20 @@ dat_cat_wide <- dat_cat %>%
   tidyr::pivot_wider(
     id_cols = c(datasetID, verbatimIdentification),
     names_from = samplingPeriodID,
-    values_from = c(log_R2_1, trend_LR, Jaccard_dissim, trend_J))
+    values_from = c(log_R2_1, trend_LR, Jaccard_dissim, trend_J)
+  )
 
 print(colnames(dat_cat_wide))
-lookup <- c("LR_Observed" = "log_R2_1_1",
-            "trend_LR_Observed" = "trend_LR_1",
-            "LR_Predicted" = "log_R2_1_2",
-            "trend_LR_Predicted" = "trend_LR_2",
-            "J_Observed" = "Jaccard_dissim_1",
-            "trend_J_Observed" = "trend_J_1",
-            "J_Predicted" = "Jaccard_dissim_2",
-            "trend_J_Predicted" = "trend_J_2")
+lookup <- c(
+  "LR_Observed" = "log_R2_1_1",
+  "trend_LR_Observed" = "trend_LR_1",
+  "LR_Predicted" = "log_R2_1_2",
+  "trend_LR_Predicted" = "trend_LR_2",
+  "J_Observed" = "Jaccard_dissim_1",
+  "trend_J_Observed" = "trend_J_1",
+  "J_Predicted" = "Jaccard_dissim_2",
+  "trend_J_Predicted" = "trend_J_2"
+)
 dat_cat_wide <- dat_cat_wide %>%
   dplyr::rename(all_of(lookup)) %>%
   arrange(datasetID)
@@ -225,16 +244,18 @@ dat_cat_wide <- dat_cat_wide %>%
 names_data <- unique(dat_cat_wide$datasetID)
 
 # Reorder columns
-dat_cat_wide <- dat_cat_wide[, c("datasetID",
-                                 "verbatimIdentification",
-                                 "J_Predicted",
-                                 "trend_J_Predicted",
-                                 "J_Observed",
-                                 "trend_J_Observed",
-                                 "LR_Predicted",
-                                 "trend_LR_Predicted",
-                                 "LR_Observed",
-                                 "trend_LR_Observed")]
+dat_cat_wide <- dat_cat_wide[, c(
+  "datasetID",
+  "verbatimIdentification",
+  "J_Predicted",
+  "trend_J_Predicted",
+  "J_Observed",
+  "trend_J_Observed",
+  "LR_Predicted",
+  "trend_LR_Predicted",
+  "LR_Observed",
+  "trend_LR_Observed"
+)]
 
 # Plot:
 
@@ -243,17 +264,21 @@ fig1_LR_past <- dat_cat %>%
   filter(samplingPeriodID == 1) %>%
   group_by(datasetID, trend_LR) %>%
   summarise(n_sp = n_distinct(verbatimIdentification)) %>%
-  ggplot(aes(y = n_sp, x = trend_LR, fill = trend_LR))+
-  geom_col(col = "lightgrey", show.legend = FALSE)+
-  ylim(0, 260)+
-  facet_grid(~datasetID)+
-  ggthemes::theme_few()+
+  ggplot(aes(y = n_sp, x = trend_LR, fill = trend_LR)) +
+  geom_col(col = "lightgrey", show.legend = FALSE) +
+  ylim(0, 260) +
+  facet_grid(~datasetID) +
+  ggthemes::theme_few() +
   scale_fill_manual(values = my_cols_LR) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        strip.text = element_text(size = 10))+
-  labs(x = "Occupancy trend (Log Ratio)", y = "Number of Species",
-       fill = NULL)
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    strip.text = element_text(size = 10)
+  ) +
+  labs(
+    x = "Occupancy trend (Log Ratio)", y = "Number of Species",
+    fill = NULL
+  )
 
 fig1_LR_past
 # export::graph2ppt(fig1_LR_past, here::here("Figures/A_data/D_02_Fig1_LnRR_Histograms.pptx"),  width = 8, height = 4)
@@ -264,17 +289,21 @@ fig1_J_past <- dat_cat %>%
   filter(samplingPeriodID == 1) %>%
   group_by(datasetID, trend_J) %>%
   summarise(n_sp = n_distinct(verbatimIdentification)) %>%
-  ggplot(aes(y = n_sp, x = trend_J, fill = trend_J))+
-  geom_col(col = "lightgrey", show.legend = FALSE)+
-  facet_grid(~datasetID)+
-  ggthemes::theme_few()+
-  ylim(0, 260)+
+  ggplot(aes(y = n_sp, x = trend_J, fill = trend_J)) +
+  geom_col(col = "lightgrey", show.legend = FALSE) +
+  facet_grid(~datasetID) +
+  ggthemes::theme_few() +
+  ylim(0, 260) +
   scale_fill_manual(values = my_cols_J) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        strip.text = element_text(size = 10))+
-  labs(x = "Occupancy trend (Jaccard)", y = "Number of Species",
-       fill = NULL)
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    strip.text = element_text(size = 10)
+  ) +
+  labs(
+    x = "Occupancy trend (Jaccard)", y = "Number of Species",
+    fill = NULL
+  )
 
 fig1_J_past
 
@@ -285,42 +314,51 @@ fig1_J_past
 
 legend_J <- ggpubr::get_legend(
   dat_cat %>%
-  filter(samplingPeriodID == 1) %>%
-  group_by(datasetID, trend_J) %>%
-  summarise(n_sp = n_distinct(verbatimIdentification)) %>%
-  ggplot(aes(y = n_sp, x = trend_J, fill = trend_J))+
-  geom_col(col = "lightgrey", show.legend = TRUE)+
-  facet_grid(~datasetID)+
-  ggthemes::theme_few()+
-  ylim(0, 260)+
-  scale_fill_manual(values = my_cols_J) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        strip.text = element_text(size = 10))+
-  labs(x = "Occupancy trend (Jaccard)", y = "Number of Species",
-       fill = NULL)+
-  theme(legend.position="bottom"))
+    filter(samplingPeriodID == 1) %>%
+    group_by(datasetID, trend_J) %>%
+    summarise(n_sp = n_distinct(verbatimIdentification)) %>%
+    ggplot(aes(y = n_sp, x = trend_J, fill = trend_J)) +
+    geom_col(col = "lightgrey", show.legend = TRUE) +
+    facet_grid(~datasetID) +
+    ggthemes::theme_few() +
+    ylim(0, 260) +
+    scale_fill_manual(values = my_cols_J) +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      strip.text = element_text(size = 10)
+    ) +
+    labs(
+      x = "Occupancy trend (Jaccard)", y = "Number of Species",
+      fill = NULL
+    ) +
+    theme(legend.position = "bottom")
+)
 plot(legend_J)
 ggsave(filename = "D_02_Fig1_b_legend.svg", path = here::here("Figures/C_validation/"), width = 15)
 
 
 legend_lnR <- ggpubr::get_legend(
   dat_cat %>%
-  filter(samplingPeriodID == 1) %>%
-  group_by(datasetID, trend_LR) %>%
-  summarise(n_sp = n_distinct(verbatimIdentification)) %>%
-  ggplot(aes(y = n_sp, x = trend_LR, fill = trend_LR))+
-  geom_col(col = "lightgrey", show.legend = TRUE)+
-  ylim(0, 260)+
-  facet_grid(~datasetID)+
-  ggthemes::theme_few()+
-  scale_fill_manual(values = my_cols_LR) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        strip.text = element_text(size = 10))+
-  labs(x = "Occupancy trend (Log Ratio)", y = "Number of Species",
-       fill = NULL)+
-    theme(legend.position="bottom"))
+    filter(samplingPeriodID == 1) %>%
+    group_by(datasetID, trend_LR) %>%
+    summarise(n_sp = n_distinct(verbatimIdentification)) %>%
+    ggplot(aes(y = n_sp, x = trend_LR, fill = trend_LR)) +
+    geom_col(col = "lightgrey", show.legend = TRUE) +
+    ylim(0, 260) +
+    facet_grid(~datasetID) +
+    ggthemes::theme_few() +
+    scale_fill_manual(values = my_cols_LR) +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      strip.text = element_text(size = 10)
+    ) +
+    labs(
+      x = "Occupancy trend (Log Ratio)", y = "Number of Species",
+      fill = NULL
+    ) +
+    theme(legend.position = "bottom")
+)
 plot(legend_lnR)
 ggsave(filename = "D_02_Fig1_a_legend.svg", path = here::here("Figures/C_validation/"), width = 15)
-
