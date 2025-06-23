@@ -1016,7 +1016,7 @@ export::graph2ppt(
 
 
 
-
+## ## Moved also to Script D_05_Figure_S12 ###
 ## Interactions & their partial dependencies ##
 library(hstats)
 library(here)
@@ -1026,7 +1026,8 @@ library(ranger)
 data <- readRDS(here::here("Data/output/B_models/B_01_list_all_results_rf.rds"))
 
 fit_1 <- data$res[[1]] %>% extract_fit_parsnip()
-
+fit_2 <- data$res[[2]] %>% extract_fit_parsnip()
+fit_3 <- data$res[[3]] %>% extract_fit_parsnip()
 
 partial_dep(object = fit_1,
             v = "mean_lnLac",
@@ -1042,7 +1043,7 @@ partial_dep(object = fit_1,
             v = c("mean_lnLac", "joincount_delta"),
             X = data$list_split_data[[1]]$train,
             #BY = "joincount_delta",
-            grid_size = 10000) %>%
+            grid_size = 100) %>%
   plot()
 
 
@@ -1052,4 +1053,30 @@ partial_dep(object = fit_1,
             X = data$list_split_data[[1]]$train,
             #BY = "AOO",
             grid_size = 1000) %>%
+  plot()
+
+
+
+
+# Log Ratio: Body mass ~ AOO 
+# Heatmap
+partial_dep(object = fit_2,
+            v = c("Mass", "AOO"),
+            X = data$list_split_data[[1]]$train,
+            grid_size = 100) %>%
+  plot()
+
+partial_dep(object = fit_3,
+            v = c("Mass", "Habitat_5"),
+            BY = "datasetID",
+            X = data$list_split_data[[1]]$train,
+            grid_size = 100) %>%
+  plot()
+
+
+partial_dep(object = fit_3,
+            v = c("AOO", "D_AOO_a"),
+            BY = "datasetID",
+            X = data$list_split_data[[1]]$train,
+            grid_size = 100) %>%
   plot()
