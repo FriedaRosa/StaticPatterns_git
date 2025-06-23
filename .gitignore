@@ -17,6 +17,7 @@
 *.png
 *.rmarkdown
 *.Rproj
+*.qmd
 
 
 # Exceptions: (include these!)
@@ -43,3 +44,4 @@ Project_Description.qmd
 /Data/input/shp_introduced
 /renv/
 /Figures/
+.Renviron
