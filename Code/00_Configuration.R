@@ -30,11 +30,9 @@ package_list <- c("RPostgres", "here",
 
                   "readxl", "terra",  "taxize",
 
-                  "ape", "phyloregion", "phylosignal",
+                  "ape", "phylobase", "phyloregion", "phylosignal",
 
-                  "doParallel", "hstats",
-                  
-                  "DataExplorer", "explore", "inspectdf", "summarytools")
+                  "hstats", "DALEXtra", "ranger", "tidymodels")
 
 
 # install packages
