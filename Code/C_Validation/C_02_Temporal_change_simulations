@@ -14,25 +14,20 @@ editor:
     wrap: 72
 ---
 
-# C - 02: Temporal Change simulations
+# C - 02: Jaccard simulations 
+# Simulating *J dissimilarity* under different scenarios of scale, occupancy, temporal change magnitude
 
-Simulating temporal *J dissimilarity* & *log Ratio* under different
-scenarios of scale, occupancy, temporal change magnitude
 
-[**Parameters to simulate:**]{.underline}
+## Parameters to simulate
 
--   universe size
+- universe size
+– occu 1
+– flip type: directional/random
+– number of changes
+– number of runs
 
--   occu in time 1
-
--   flip type: directional/random
-
--   number of changes
-
--   number of runs
 
 ```{r}
-#| label: cleaner
 #| echo: false
 #| message: false
 #| warning: false
@@ -41,11 +36,9 @@ scenarios of scale, occupancy, temporal change magnitude
 rm(list = ls())
 gc()
 ```
-## Preparations
-### Libraries
 
+## Libraries
 ```{r}
-#| label: libs
 #| message: false
 #| warning: false
 #| results: "hide"
@@ -62,8 +55,7 @@ suppressPackageStartupMessages({
       "plotly",
       "ggplot2",
       "mgcv",
-      "GGally",
-      "corrr"
+      "GGally"
     )
 
   lapply(package_list, require, character = TRUE)
@@ -73,10 +65,8 @@ suppressPackageStartupMessages({
 rm(list = ls())
 ```
 
-### 🔍 Jaccard formula
-
+## 🔍 Jaccard formula
 ```{r}
-#| label: j-func
 #| eval: false
 #| include: true
 
@@ -94,10 +84,8 @@ my_jaccard_abc <- function(set1, set2) {
 }
 ```
 
-### ❇️ Simulation function
-
+## ❇️ Simulation function
 ```{r}
-#| label: sim-func
 #| eval: false
 #| include: true
 
@@ -180,10 +168,9 @@ simulate_jaccard <- function(lengths, occu1, flip_types, n_runs = 1) {
 }
 ```
 
-## ️Run simulation
+## 🐢 ️Run simulations
 
 ```{r}
-#| label: run-simulation
 #| eval: false
 #| include: true
 
@@ -204,8 +191,9 @@ saveRDS(jaccard_df, here(
 ))
 ```
 
+## 🔍Inspect results
+
 ```{r}
-#| label: time-saver
 #| echo: false
 #| eval: true
 #| label: read-data
@@ -219,18 +207,21 @@ jaccard_df <-
   unique()
 ```
 
-### 🔍Inspect results
+quick check
+```{r}
+#| label: process-data
+str(jaccard_df)
+```
 
 organize data frame to inspect
 
 ```{r}
-#| label: reorganize-dta
 sim_df <- data.frame(
   run = jaccard_df$run,
   universe_size = jaccard_df$length,
   change_type = as.factor(jaccard_df$flip_type),
   n_changes = jaccard_df$num_changes,
-  j_dissim = 1 - jaccard_df$jaccard,
+  j_dissim = 1 - round(jaccard_df$jaccard, 4),
   AOO_1 = jaccard_df$N_occu_1,
   AOO_2 = jaccard_df$N_occu_2,
   a = jaccard_df$intersect,
@@ -239,10 +230,9 @@ sim_df <- data.frame(
   d = jaccard_df$length - jaccard_df$intersect - jaccard_df$unique_2 - jaccard_df$unique_1
 ) %>%
   ungroup() %>%
-  filter(!(AOO_1 == 0 & AOO_2 == 0)) %>%
-  filter(AOO_1 != 0, AOO_2 != 0) %>%
-  #filter(AOO_1 != universe_size) %>%
-  #filter(n_changes != universe_size) %>%
+  filter(AOO_1 != 0 & AOO_2 != 0) %>%
+  filter(AOO_1 != universe_size) %>%
+  filter(n_changes != universe_size) %>%
   mutate(
     log_ratio = log(AOO_2 / AOO_1),
     rel_persistance = a / universe_size,
@@ -250,23 +240,16 @@ sim_df <- data.frame(
   ) %>%
   ungroup() %>%
   mutate(
-    trend = as.factor(case_when(
-      b > c ~ "expanding range",
+    trend = case_when(b > c ~ "expanding range",
       b < c ~ "declining range",
       b == c ~ "A_net zero trend", # added A to sort levels for regression
       .default = NA
-    ))
+    )
   )
-
-skim(sim_df)
 ```
 
-create expanding trend for directional simulations from declining
-simulations
-
+create expanding trend for directional simulations from declining simulations
 ```{r}
-#| label: create-change-for-directional-expanding
-
 expanding <-
   sim_df %>%
   filter(change_type == "from_1_to_0") %>%
@@ -279,79 +262,40 @@ expanding <-
     "AOO_2" = "AOO_1"
   ) %>%
   mutate(
-    trend = as.factor(case_when(b > c ~ "expanding range",
+    trend = case_when(b > c ~ "expanding range",
       b < c ~ "declining range",
       b == c ~ "A_net zero trend",
       # added A to sort levels for regression
       .default = NA
-    ))
+    )
   )
 
+expanding %>% filter(is.na(trend)) # no NAs
 head(expanding)
 ```
 
-```{r}
-#| label: create-change_type2-column
-#| message: false
-#| error: false
-#| warning: false
 
+```{r}
 sim_df <-
   sim_df %>%
   full_join(expanding) %>%
-  mutate(trend = as.factor(trend),
-         change_type = case_when(change_type == "random" ~ "A_random",
-                                 change_type != "random" ~ change_type)) %>%
+  mutate(trend = as.factor(trend)) %>%
   mutate(
     change_type2 =
-      as.factor(
       case_when(change_type == "random" ~ "random",
         change_type %in% c("from_1_to_0", "from_0_to_1") ~ "directional",
         .default = NA
-      ))
+      )
   )
+```
 
-# check:
+
+```{r}
 sim_df %>%
   filter(change_type == "from_0_to_1") %>%
   group_by(trend) %>%
   skim(log_ratio, a, b, c)
 ```
-### Regression models
-```{r}
-model_df <- sim_df %>% 
-  select(j_dissim, log_ratio,
-         universe_size, AOO_1, n_changes, change_type) %>% 
-  mutate(across(c(universe_size, AOO_1, n_changes),
-                scale, .names = "z_{.col}"))          # standardise for comparability
-
-m_j <- lm(j_dissim ~ z_universe_size +
-                        z_AOO_1 * z_n_changes +
-                        change_type,
-          data = model_df)
-
-m_lr <- lm(log_ratio ~ z_universe_size +
-                          z_AOO_1 * z_n_changes +
-                          change_type,
-           data = model_df)
-
-
-summary(m_j)
-m_j$coefficients %>% round(3)
-summary(m_lr)
-m_lr$coefficients %>% round
-
-
-library(broom)
-
-tidy(m_j, conf.int = TRUE) %>% 
-  arrange(desc(abs(statistic)))   # biggest |t| first
-
-tidy(m_lr, conf.int = TRUE) %>% 
-  arrange(desc(abs(statistic)))
-
-```
-
 
 ```{r}
 #| label: j-summary-1
@@ -373,16 +317,14 @@ sim_df %>%
   skimr::skim()
 ```
 
-### random x large subset
-this one gives the clearest pattern in terms of resolution, 
-and the most representable in nature because change is very rarely only directional.
+### random x large (10 simulations)
 
 ```{r}
 #| label: data-subset-random-and-large
 random_large <-
   sim_df %>%
   filter(universe_size == 1000) %>%
-  filter(change_type == "A_random") %>%
+  filter(change_type == "random") %>%
   # filter(run <= 10) %>%
   select(-universe_size, -change_type)
 ```
@@ -394,6 +336,7 @@ random_large <-
 #| message: false
 #| error: false
 #| label: correlations
+suppressPackageStartupMessages(library(corrr))
 
 # Select numeric columns and compute correlation with targets
 cor_df <- random_large %>%
@@ -413,10 +356,10 @@ random_large %>%
   autoplot()
 ```
 
+#### Regression models
 
 ```{r}
 #| label: regression-models
-
 # Add interaction term
 random_large <- random_large %>%
   mutate(AOO_1_n_changes = AOO_1 * n_changes)
@@ -432,8 +375,8 @@ summary(model_log_ratio)
 model_log_ratio$coefficients %>% round(2)
 ```
 
-#### log R \~ J (smaller subset: 20 runs instead of 100)
 
+#### log R ~ J (smaller subset: 20 runs instead of 100)
 ```{r}
 random_large %>%
   filter(run <= 20) %>%
@@ -442,7 +385,7 @@ random_large %>%
   ggthemes::theme_few()
 ```
 
-#### Responses \~ AOO \~ n_changes
+#### Responses ~ AOO ~ n_changes
 
 ```{r}
 
@@ -472,6 +415,8 @@ random_large %>%
   ggthemes::theme_par() +
   facet_wrap(~trend)
 ```
+
+
 
 #### 3D surface plot for Jaccard (GAM smoothed)
 
@@ -719,8 +664,7 @@ scatterplot3d(random_large$AOO_1,
   zlab = "Jaccard"
 )
 ```
-
-#### Pairs-plot
+#### Pairs-plot 
 
 ```{r}
 #| fig-width: 40
@@ -733,6 +677,7 @@ GGally::ggpairs(
   progress = FALSE
 )
 ```
+
 
 ### J by net area trend
 
@@ -762,7 +707,6 @@ ggplot(sim_df, aes(x = trend, y = j_dissim, fill = trend)) +
 ```
 
 ### log ratio boxplot
-
 ```{r}
 #| fig.height: 12
 #| fig.width: 10
@@ -798,31 +742,41 @@ sim_df %>%
 
 ### Change intensity
 
-Change intensity is: the ratio between the number of changed cells and
-AOO_1: change intensity = (b+c)/AOO_1 where b = colonized cells, c =
-extirpated cells
 
-Explanation: I. ratio approaches 0 when low change - i.e., when the
-number of lost + gained cells is low compared to AOO_1. - b+c \< AOO_1
---\> leads to low J dissimilarity
+Change intensity is:
+the ratio between the number of changed cells and AOO_1:
+change intensity = (b+c)/AOO_1
+where b = colonized cells, c = extirpated cells
 
-II. ratio approaches 1 when high change
+Explanation:
+I.
+ratio approaches 0 when low change
+- i.e., when the number of lost + gained cells is low compared to AOO_1.
+- b+c < AOO_1
+--> leads to low J dissimilarity
 
--   i.e., when the number of lost + gained cells is comparable to AOO_1
--   b+c = AOO_1 --\> leads to high J dissimilarity for both directions
-    of change
 
-III. ratio approaches 2 when change is higher than initial occupancy
+II.
+ratio approaches 1 when high change
+- i.e., when the number of lost + gained cells is comparable to AOO_1
+- b+c = AOO_1
+--> leads to high J dissimilarity for both directions of change
 
--   i.e., when more cells are lost + gained than occupied in AOO_1,
--   b+c \>\> AOO_1
--   --\> leads to moderate to high J when range is expanding
--   --\> leads to high J if range is declining
+III.
+ratio approaches 2 when change is higher than initial occupancy
+- i.e., when more cells are lost + gained than occupied in AOO_1,
+- b+c >> AOO_1
+- --> leads to moderate to high J when range is expanding
+- --> leads to high J if range is declining
 
-or - i.e., when all no cells persist, i.e., all cells from AOO_1 are
-lost and some are gained (c = AOO_1 & b \> 0) - a = 0 --\> leads to high
-J for both directions of change or - i.e., with strong expansion (b \>\>
-AOO_1) --\> leads to moderate to strong J for both directions
+or
+- i.e., when all no cells persist, i.e., all cells from AOO_1 are lost and some are gained (c = AOO_1 & b > 0)
+- a = 0
+--> leads to high J for both directions of change
+or
+- i.e., with strong expansion (b >> AOO_1)
+--> leads to moderate to strong J for both directions
+
 
 ```{r}
 sim_df %>%
