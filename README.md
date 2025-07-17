@@ -37,6 +37,7 @@
 - use `renv::restore()` to restore packages & dependencies from the
   lockfile (this will lead in a huge downloading session of packages)
 - there are rendered .html files for all code (see/click links below to see)
+- click [*here*](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/11e14ef4f0208185b1110de9ea50ad1081532c07/Project_Description.html) for advanced Project Description (incl. figs, results, predictor table)
 
 ------------------------------------------------------------------------
 # Rendered code in .html
