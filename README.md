@@ -36,9 +36,55 @@
   working directory to the root folder (“Git”)
 - use `renv::restore()` to restore packages & dependencies from the
   lockfile (this will lead in a huge downloading session of packages)
+- there are rendered .html files for all code (see/click links below to see)
 
 ------------------------------------------------------------------------
+# Rendered code in .html
+## Example: New York State
+- [A_01_NY_Preprocess_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Demo_NewYork/Code/A_01_NY_Preprocess_data.html)
+- [A_02_NY_Calculate_atlas_variables.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Demo_NewYork/Code/A_02_NY_Calculate_atlas_variables.html)
+- [A_03_NY_Calculate_predictors.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Demo_NewYork/Code/A_03_NY_Calculate_predictors.html)
+- [B_01_NY_Machine_learning.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Demo_NewYork/Code/B_01_NY_Machine_learning.html)
 
+## All code (Japan, New York, Czechia, Europe)
+
+### A: Prepare data
+- [A_01_Get_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_01_Get_data.html)
+- [A_02_Preprocess_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_02_Preprocess_data.html)
+- [A_03_Taxon_matching_across_datasets.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_03_Taxon_matching_across_datasets.html)
+- [A_04_Calculate_atlas_variables.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_04_Calculate_atlas_variables.html)
+- [A_05_Predictors_avonet.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_05_Predictors_avonet.html)
+- [A_06_Predictors_phylogenetic_metrics.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_06_Predictors_phylogenetic_metrics.html)
+- [A_07_Predictors_IUCN.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_07_Predictors_IUCN.html)
+- [A_08_Predictors_geometry.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_08_Predictors_geometry.html)
+- [A_09_Predictors_spatial_autocorrelation.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_09_Predictors_spatial_autocorrelation.html)
+- [A_10a_Predictors_lacunarity_rasterize_ranges.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_10a_Predictors_lacunarity_rasterize_ranges.html)
+- [A_10b_Predictors_lacunarity_calculation.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_10b_Predictors_lacunarity_calculation.html)
+- [A_11_Predictors_global_range_size.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_11_Predictors_global_range_size.html)
+- [A_12_Merge_predictors.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_12_Merge_predictors.html)
+- [A_13_Data_viz.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_13_Data_viz.html)
+
+### B: Machine learning
+- [B_01_RandomForest_all_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_01_RandomForest_all_data.html)
+- [B_02_RandomForest_split_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_02_RandomForest_split_data.html)
+- [B_03_Phylogenetic_autocorrelation.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_03_Phylogenetic_autocorrelation.html)
+- [B_04_Model_performance_figures.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_04_Model_performance_figures.html)
+
+### C: Validation
+- [C_01_Validation.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/C_Validation/C_01_Validation.html)
+- [C_02_Temporal_change_simulations.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/C_Validation/C_02_Temporal_change_simulations.html)
+- [C_03_Zero_trend_species.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/C_Validation/C_03_Zero_trend_species.html)
+
+### D: Figures
+- [D_01_Make_change_maps.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_01_Make_change_maps.html)
+- [D_02_Figure_1.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_02_Figure_1.html)
+- [D_03_Figure_2.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_03_Figure_2.html)
+- [D_04_Figure_3.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_04_Figure_3.html)
+- [D_05_Figure_S12a.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_05_Figure_S12a.html)
+- [D_05_Figure_S12b.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_05_Figure_S12b.html)
+- [D_05_Figure_S12c.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/D_Figures/D_05_Figure_S12c.html)
+
+------------------------------------------------------------------------
 # 1. Project/File structure:
 
 ``` r
@@ -193,3 +239,6 @@ variables and lookup tables needed for many steps.
 
 - Species in New York and Japan are more dissimilar than species in
   Czechia and Europe
+
+
+  
