@@ -66,8 +66,8 @@
 - [A_13_Data_viz.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/A_Prepare_data/A_13_Data_viz.html)
 
 ### B: Machine learning
-- [B_01_RandomForest_all_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_01_RandomForest_all_data.html)
-- [B_02_RandomForest_split_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_02_RandomForest_split_data.html)
+- [B_01_RandomForest_all_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/11aa958f64686347a34d8ae0110bcbd409c1eae0/Code/B_Machine_learning/B_01_RandomForest_all_data.html)
+- [B_02_RandomForest_split_data.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/11aa958f64686347a34d8ae0110bcbd409c1eae0/Code/B_Machine_learning/B_02_RandomForest_split_data.html)
 - [B_03_Phylogenetic_autocorrelation.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_03_Phylogenetic_autocorrelation.html)
 - [B_04_Model_performance_figures.html](https://rawcdn.githack.com/FriedaRosa/StaticPatterns_git/5e629d71a4a8bd07e130f08a0d9360f80f748137/Code/B_Machine_learning/B_04_Model_performance_figures.html)
 
