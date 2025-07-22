@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/998695925.svg)](https://doi.org/10.5281/zenodo.16310522)
 # Static Predictors - Read Me
 
 # 0. Meta information:
