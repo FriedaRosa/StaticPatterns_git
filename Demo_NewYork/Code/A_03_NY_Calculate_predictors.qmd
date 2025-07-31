@@ -181,11 +181,6 @@ rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","tr
 For this part we need a personal API key to access the IUCN Red List API. You can get one from [here](https://api.iucnredlist.org/). There you have to sign up with an account and request an API token. Once you have it, you can either set it as an environment variable in an .Renviron file e.g., `IUCN_REDLIST_KEY = [key]` or paste it directly into the code below.
 
 - [4] IUCN (2025)
-```{r}
-#| include: false
-#| eval: true
-my_key <-"DwikYETjk5iHVudwZdUDhCYVT5fqFjScBnkE"
-```
 
 
 ```{r}
@@ -199,7 +194,7 @@ tictoc::tic()
 IUCN.list <-
   suppressMessages(iucn_summary(unique(sci_name$scientificName),
     distr.detail = F,
-    key = my_key # change to your token key
+    key = Sys.getenv("IUCN_REDLIST_KEY") # change to your token key
   ))
 tictoc::toc() # 179.11 sec elapsed
 
@@ -242,7 +237,7 @@ species_with_NA <-
 IUCN.list2 <-
   suppressMessages(iucn_summary(unique(species_with_NA$name),
     distr.detail = F,
-    key =my_key
+    key = Sys.getenv("IUCN_REDLIST_KEY")
   ))
 # 3 species not found of which 2 are hybrids and Nannopterium auritus which we will look up manually and assign the status by hand
 
@@ -302,7 +297,7 @@ rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","tr
 
 ```{r}
 # Functions:
-## Normalized circularity function (written by Gabriel Ortega Solís)
+## Normalized circularity function (written by ANONYMIZED-3)
 circNorm <- function(x){
     perimeter <- perim(x)
     area <- expanse(x)
@@ -403,7 +398,7 @@ rm(list = setdiff(ls(),c("data_sf_path","tax_path","sp_data_path","sci_name","tr
 ```
 
 ### Spatial autocorrelation
-We calculate the difference in expected and observed join counts for presences across the atlas for each species and sampling period. This is done using the `joincount.test()` function from the `spdep` package. The join count test is a measure of spatial autocorrelation that counts the number of pairs of neighboring sites that have the same value (in this case, presence or absence of a species). In the calculation of delat join count, we follow still unpublished work by Soria et al. (2025) [5]
+We calculate the difference in expected and observed join counts for presences across the atlas for each species and sampling period. This is done using the `joincount.test()` function from the `spdep` package. The join count test is a measure of spatial autocorrelation that counts the number of pairs of neighboring sites that have the same value (in this case, presence or absence of a species). In the calculation of delat join count, we follow work by Soria et al. (2025) [5]
 
 ```{r}
 # CRS
@@ -903,7 +898,7 @@ write.csv(data_final, here::here("Demo_NewYork/Data/output/data_final_ny.csv"))
 
 [4] IUCN (2025). The IUCN Red List of Threatened Species. Version 2025-1. https://www.iucnredlist.org. Accessed 14 June 2025.
 
-[5] Soria, C. D., Ortega-Solís, G. R., Wölke, F. J. R., Barták, V., Tschernosterová, K., Bejček, V., Herrando, S., Mikuláš, I., Šťastný, K., Ueta, M., Voříšek, P., & Keil, P. (in preparation). Spatial autocorrelation of species diversity and distributions in time and across spatial scales.
+[5] Soria, C. D., Ortega-Solís, G. R., Wölke, F. J. R., Barták, V., Tschernosterová, K., Bejček, V., Herrando, S., Mikuláš, I., Šťastný, K., Ueta, M., Voříšek, P., & Keil, P. (Preprint, 2025). Spatial autocorrelation of species diversity and distributions in time and across spatial scales. https://doi.org/10.1101/2025.06.13.659470
 
 [6] BirdLife International & Handbook of the Birds of the World. (2024). Bird species distribution maps of the world (Version 9.0) [Dataset]. http://datazone.birdlife.org/species/requestdis
 

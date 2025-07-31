@@ -14,7 +14,7 @@ editor:
     wrap: 72
 ---
 
-## Data preparation (by Gabriel Ortega Solís)
+## Data preparation (by ANONYMIZED-3)
 
 Since most data we used here come with restricted rights of sharing, we
 set up a workflow for the New York Breeding Bird atlas, which is freely
@@ -102,7 +102,7 @@ data_table <- data.table(
   shareable = "NO",
   coauthorshipRequired = "NO",
   coauthors = "",
-  coauthorshipSuggested = "Carmen Soria - carmendianasoria@gmail.com | Kateřina Tschernosterová - tschernosterova@fzp.czu.cz | Friederike Wölke - friederike.woelke@gmail.com | Gabriel Ortega - g.ortega.solis@gmail.com",
+  coauthorshipSuggested = "ANONYMIZED-2, ANONYMIZED-1, ANONYMIZED-3, ANONYMIZED-4",
   isSamplingEffortReported = "YES",
   isOccurrenceProbabilityAvailable = "NO"
 )
