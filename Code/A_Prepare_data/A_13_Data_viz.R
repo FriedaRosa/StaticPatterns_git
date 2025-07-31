@@ -6,7 +6,7 @@
 #                 Data_vizualization.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#

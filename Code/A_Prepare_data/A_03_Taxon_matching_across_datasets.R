@@ -52,8 +52,8 @@ length(unique(tax_lookup$verbatimIdentification)) # 762 from raw data
 
 
 
-# Crosswalk for BL2010-BL2018 (from Carmen)
-crosswalk <- readxl::read_excel("c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/input/BL_taxonomy_crosswalk.xlsx",
+# Crosswalk for BL2010-BL2018 (from ANONYMIZED-2)
+crosswalk <- readxl::read_excel(here("Data/input/BL_taxonomy_crosswalk.xlsx"),
                                 sheet = "Crosswalk") %>%
   dplyr::select(1,41) %>% # 2018 & 2010 taxonomy
   setNames(c("ScientificName2018", "ScientificName2010"))
@@ -106,7 +106,7 @@ tax_lookup2 %>% filter(is.na(ScientificName2018)) %>% kable()
 #################
 
 # Avonet crosswalk: Birdlife / BirdTree (Species 1 = ScientificName2018)
-BL_BT_crosswalk <- read_excel("c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/input/AVONET Supplementary dataset 1.xlsx",
+BL_BT_crosswalk <- read_excel(here("Data/input/AVONET Supplementary dataset 1.xlsx"),
                               sheet = "BirdLife–BirdTree crosswalk")
 
 #dd_BL_notMatched <- setdiff(tax_lookup2$ScientificName2018 %>% na.omit(), BL_BT_crosswalk$Species1 %>% na.omit()) # 0 sp not matched

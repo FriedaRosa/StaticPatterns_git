@@ -6,7 +6,7 @@
 #                      01_Get_data.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1 
 #                        2025
 #
 #----------------------------------------------------------#
@@ -31,8 +31,8 @@ con <- dbConnect(Postgres(),
                  dbname = "MOBI_atlases_v1",
                  host = "localhost",
                  port = 5432,
-                 user = "frieda",
-                 password = Sys.getenv('PASSWORD_SERVER')
+                 user = Sys.getenv("USER_SERVER"),
+                 password = Sys.getenv("PASSWORD_SERVER")
 )
 dbListTables(con)
 #--------------------------------------------------#
@@ -85,9 +85,6 @@ dbDisconnect(con)
 # Save data -----
 #----------------------------------------------------------#
 
-# save METADATA for atlases to documentation file:
-write.csv(meta, here("Documentation","Metadata", "METADATA_datasets.csv"))
-
 # write to input data folder
 saveRDS(grids, vars$grid)
 
@@ -110,7 +107,7 @@ con <-
             dbname = "Birds_of_the_World",
             host = "localhost",
             port = 5432,
-            user = "frieda",
+            user = Sys.getenv("USER_SERVER"),
             password = Sys.getenv('PASSWORD_SERVER')
 )
 

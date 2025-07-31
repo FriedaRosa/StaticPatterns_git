@@ -6,7 +6,7 @@
 #               06_Predictors_avonet.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#

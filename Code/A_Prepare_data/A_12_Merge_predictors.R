@@ -6,7 +6,7 @@
 #                      13_Merge_predictors.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#
@@ -202,13 +202,6 @@ predictors %>%
   setNames(c("variable_class", "variable", "metric", "value"))
 
 predictors %>% filter(is.na(species_keep))
-
-predictors %>%
-  filter(samplingPeriodID == 1) %>%
-  group_by(datasetID) %>%
-  skim() %>%
-  as_tibble() %>%
-  write.csv(here("Documentation/META_predictors_skim_summary_v2_reduced_version.csv"))
 
 names(predictors$D_AOO_a) <- NULL
 names(predictors$morans_I) <- NULL

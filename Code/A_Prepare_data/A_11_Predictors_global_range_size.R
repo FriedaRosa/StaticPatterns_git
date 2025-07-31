@@ -6,7 +6,7 @@
 #               09_Predictors_climate_niches.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1 
 #                        2025
 #
 #----------------------------------------------------------#

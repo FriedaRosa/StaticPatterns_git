@@ -6,7 +6,7 @@
 #               07_Predictors_phylogenetic_metrics.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#

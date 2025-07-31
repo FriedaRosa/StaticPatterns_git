@@ -6,7 +6,7 @@
 #             12a_Predictors_Lacunarity_rasterize_ranges.R
 #         Script to save species ranges (sf) as individual .tiff rasters
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#

@@ -6,7 +6,7 @@
 #                   11_Predictors_spatial_autocorrelation.R
 #                
 #
-#              Friederike Wölke, Carmen Soria  
+#              ANONYMIZED-1, ANONYMIZED-2  
 #                          2025
 #
 #----------------------------------------------------------#

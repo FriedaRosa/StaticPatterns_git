@@ -6,7 +6,7 @@
 #              B_02_RandomForest_separate_per_atlas.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                           2025
 #
 #----------------------------------------------------------#
@@ -430,7 +430,7 @@ saveRDS(interaction_res, here::here("Data/output/temp/B_02_Interaction_res_atlas
 
 # Save interactions in numbers (csv) for Documentation:
 #Source 00_Configuration.R
-source(here::here("R/00_Configuration.R"))
+source(here::here("Code/00_Configuration.R"))
 package_list <- c(package_list, "ranger", "tidymodels", "caret", "skimr", "DALEXtra")
 lapply(package_list, require, character = TRUE)
 tidymodels_prefer()

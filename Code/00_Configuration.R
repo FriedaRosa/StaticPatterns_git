@@ -6,7 +6,7 @@
 #                      00_Configuration.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1 
 #                        2025
 #
 #----------------------------------------------------------#
@@ -16,23 +16,17 @@
 # Install and load libraries -----
 #----------------------------------------------------------#
 # make list of packages to install
-package_list <- c("RPostgres", "here",
-
-                  "tidyverse", "tidyr", "dplyr",
-
-                  "ggplot2", "ggthemes", "ggfortify", "plotly",
-
-                  "spdep", "geosphere", "geodata",
-
-                  "purrr", "broom", "factoextra",
-
-                  "sf", "tictoc", "skimr", "kableExtra",
-
-                  "readxl", "terra",  "taxize",
-
-                  "ape", "phylobase", "phyloregion", "phylosignal",
-
-                  "hstats", "DALEXtra", "ranger", "tidymodels")
+package_list <- c(
+  "RPostgres", "here",
+  "tidyverse", "tidyr", "dplyr",
+  "ggplot2", "ggthemes", "ggfortify", "plotly",
+  "spdep", "geosphere", "geodata",
+  "purrr", "broom", "factoextra",
+  "sf", "tictoc", "skimr", "kableExtra",
+  "readxl", "terra", "taxize",
+  "ape", "phylobase", "phyloregion", "phylosignal",
+  "hstats", "DALEXtra", "ranger", "tidymodels"
+)
 
 
 # install packages
@@ -81,16 +75,15 @@ if (
 
 vars <-
   list(
-    predictors =
-	  "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/",
-    out =
-	   "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/output/1_data/",
-    data_sf =
-	   "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/input/data_sf.rds",
-    data =
-	   "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/input/data.rds",
-    grid =
-	   "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Data/input/grid.rds",
+    # Input data paths
+    data_sf = Sys.getenv("INPUT_SF_DATA"),
+    data = Sys.getenv("INPUT_DATA"),
+    grid = Sys.getenv("INPUT_GRID_DATA"),
+
+    # Output and working directories
+    predictors = Sys.getenv("DATA_DIR"),
+    out = Sys.getenv("OUTPUT_DIR"),
+    Documentation = Sys.getenv("DOCUMENTATION_DIR"),
     atlas_names =
       setNames(
         factor(c(5, 6, 13, 26)),
@@ -130,7 +123,5 @@ vars <-
     OR (\"datasetID\" = 6 AND \"startYear\" IN (1980, 2000))
     OR (\"datasetID\" = 13 AND \"startYear\" IN (1974, 1997))
     OR (\"datasetID\" = 26 AND \"startYear\" IN (1972, 2013))
-  )",
-    Documentation =
-	   "c:/Users/wolke/OneDrive - CZU v Praze/Frieda_PhD_files/02_StaticPatterns/Git/Documentation/"
+  )"
   )

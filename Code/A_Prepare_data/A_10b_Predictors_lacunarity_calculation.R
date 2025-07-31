@@ -4,7 +4,7 @@
 #
 #                12b_Predictors_Lacunarity_calculation.R
 #
-#               Friederike Wölke, 2025
+#              ANONYMIZED-1, 2025
 #
 #----------------------------------------------------------#
 

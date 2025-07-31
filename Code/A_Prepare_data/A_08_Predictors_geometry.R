@@ -6,7 +6,7 @@
 #                   10_Predictors_geometry.R
 #                
 #
-#              Friederike Wölke, Gabriel Ortega-Solís  
+#              ANONYMIZED-1, ANONYMIZED-3  
 #                          2025
 #
 #----------------------------------------------------------#

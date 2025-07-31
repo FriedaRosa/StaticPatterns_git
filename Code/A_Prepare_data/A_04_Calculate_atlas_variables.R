@@ -6,7 +6,7 @@
 #                 03_Calculate_atlas_variables.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                        2025
 #
 #----------------------------------------------------------#

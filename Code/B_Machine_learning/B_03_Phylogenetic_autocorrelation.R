@@ -6,7 +6,7 @@
 #              B_03_Phylogenetic_autocorrelation.R
 #                
 #
-#                    Friederike Wölke 
+#                    ANONYMIZED-1
 #                           2025
 #
 #----------------------------------------------------------#
