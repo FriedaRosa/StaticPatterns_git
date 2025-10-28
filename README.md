@@ -1,6 +1,10 @@
 [![DOI](https://zenodo.org/badge/998695925.svg)](https://doi.org/10.5281/zenodo.16310522)
 # Static Predictors - Read Me
 
+Note that this repository is not updated anymore by me (@FriedaRosa). I hold no responsibily, nor was I involved in making any changes after July 2025. The Czech University of Life Sciences, Prague and the ERC hold all rights and ownerships of this study.
+For any questions regarding this project, please reach out to @petrkeil (keil@fzp.czu.cz) as he holds the full responsibility for this project now. 
+
+
 # 0. Meta information:
 
 - **Project title**: Static Predictors
